@@ -1,0 +1,23 @@
+venv
+# Virtual environments
+venv/
+.venv/
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Env files
+.env
+.env.*
+
+# OS/editor
+.DS_Store
+.vscode/
+.idea/
+
+# Local DB (optional - keep out of git)
+*.db
+
+# Git noise
+FETCH_HEAD
