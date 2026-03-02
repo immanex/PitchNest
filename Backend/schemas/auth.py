@@ -1,9 +1,11 @@
 from pydantic import BaseModel, EmailStr, Field
 
+
 class UserCreate(BaseModel):
     email: EmailStr
     password: str = Field(min_length=8)
     full_name: str | None = None
+
 
 class UserRead(BaseModel):
     id: str
@@ -15,12 +17,17 @@ class UserRead(BaseModel):
     class Config:
         from_attributes = True
 
+
 class Token(BaseModel):
     access_token: str
     token_type: str = "bearer"
+    status: str
+    message: str
+
 
 class PasswordResetRequest(BaseModel):
     email: EmailStr
+
 
 class PasswordResetConfirm(BaseModel):
     token: str

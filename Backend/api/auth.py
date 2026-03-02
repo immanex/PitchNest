@@ -56,7 +56,9 @@ async def login_access_token(
     return Token(
         access_token=create_access_token(
             user.id, expires_delta=access_token_expires
-        )
+        ),
+        status="success",
+        message="Login successful"
     )
 
 @router.post("/password-reset", status_code=status.HTTP_202_ACCEPTED)

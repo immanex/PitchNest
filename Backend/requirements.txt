@@ -1,2 +1,9 @@
 fastapi
 uvicorn
+pydantic_settings
+'pydantic[email]'
+PyJWT
+passlib
+python-multipart
+bcrypt
+"passlib[argon2]"
