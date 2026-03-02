@@ -1,6 +1,7 @@
 from __future__ import annotations
 from datetime import datetime, timezone
 import uuid
+from sqlalchemy import DateTime
 
 from sqlalchemy import (
     String,
@@ -45,7 +46,7 @@ class User(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     is_verified: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc)
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
 
     # Relationships
@@ -92,7 +93,7 @@ class StartupProfile(Base):
     stage: Mapped[str | None] = mapped_column(String, nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc)
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
 
     founder: Mapped["User"] = relationship(back_populates="startups")
@@ -127,7 +128,7 @@ class Pitch(Base):
     feedback_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc)
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
 
     user: Mapped["User"] = relationship(back_populates="pitches")
@@ -163,7 +164,7 @@ class Room(Base):
         String, ForeignKey("users.id", ondelete="CASCADE")
     )
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc)
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
     members: Mapped[list["User"]] = relationship(
         "User", secondary=room_members, back_populates="rooms"

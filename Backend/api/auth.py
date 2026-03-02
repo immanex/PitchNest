@@ -3,9 +3,9 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import Annotated
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 import logging
-
+import jwt
 from db.database import get_db
 from db.models import User
 from schemas.auth import UserCreate, UserRead, Token, PasswordResetRequest, PasswordResetConfirm
@@ -15,6 +15,9 @@ from api.deps import get_current_user
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 logger = logging.getLogger(__name__)
+
+
+
 
 @router.post("/signup", response_model=UserRead, status_code=status.HTTP_201_CREATED)
 async def signup(user_in: UserCreate, db: AsyncSession = Depends(get_db)):
@@ -84,7 +87,7 @@ async def confirm_password_reset(
     db: AsyncSession = Depends(get_db)
 ):
     try:
-        import jwt
+       
         payload = jwt.decode(confirm.token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         user_id = payload.get("sub")
     except Exception:

@@ -6,4 +6,4 @@ PyJWT
 passlib
 python-multipart
 bcrypt
-"passlib[argon2]"
+asyncpg
