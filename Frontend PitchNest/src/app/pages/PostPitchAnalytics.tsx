@@ -1,17 +1,17 @@
-import { Link } from 'react-router';
-import { motion } from 'motion/react';
-import { 
-  Download, 
-  Play, 
-  TrendingUp, 
-  TrendingDown,
-  MessageSquare,
-  Clock,
+import {
   AlertCircle,
   Award,
-  ChevronLeft
+  ChevronLeft,
+  Clock,
+  Download,
+  MessageSquare,
+  Play,
+  TrendingDown,
+  TrendingUp
 } from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { motion } from 'motion/react';
+import { Link } from 'react-router-dom';
+import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
 // Mock data for confidence trend
 const confidenceData = [

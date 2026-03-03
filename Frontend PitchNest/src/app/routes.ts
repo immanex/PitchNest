@@ -1,5 +1,8 @@
-import { createBrowserRouter } from "react-router";
+import { createBrowserRouter } from "react-router-dom";
+
 import Landing from "./pages/Landing";
+import Login from "./pages/Login";
+import Register from "./pages/Register";
 import ProfileSetup from "./pages/ProfileSetup";
 import ModeSelection from "./pages/ModeSelection";
 import LivePitchRoom from "./pages/LivePitchRoom";
@@ -9,6 +12,14 @@ export const router = createBrowserRouter([
   {
     path: "/",
     Component: Landing,
+  },
+  {
+    path: "/login",
+    Component: Login,
+  },
+  {
+    path: "/register",
+    Component: Register,
   },
   {
     path: "/profile-setup",

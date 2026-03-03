@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router';
+import { Link } from "react-router-dom";
 import { motion } from 'motion/react';
 import { Check, Briefcase, GraduationCap, Users, TrendingUp, Rocket, Building, ChevronRight, ChevronLeft } from 'lucide-react';
 
