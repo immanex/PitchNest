@@ -1,47 +1,48 @@
-import { useState, useEffect } from 'react';
-import { Link } from 'react-router';
-import { motion, AnimatePresence } from 'motion/react';
-import { 
-  Video, 
-  VideoOff, 
-  Mic, 
-  MicOff, 
-  Pause, 
-  Play, 
-  MessageSquare, 
-  X, 
+import { useState, useEffect, useRef } from "react";
+import { useParams, Link } from "react-router";
+import { motion, AnimatePresence } from "motion/react";
+import {
+  Video,
+  VideoOff,
+  Mic,
+  MicOff,
+  Pause,
+  Play,
+  MessageSquare,
+  X,
   Send,
   ChevronLeft,
-  ChevronRight
-} from 'lucide-react';
+  ChevronRight,
+} from "lucide-react";
+import { useUser } from "../context/UserContext";
 
 const investors = [
   {
-    id: 'aggressive',
-    name: 'The Aggressive VC',
-    avatar: '💼',
-    status: 'active',
-    color: '#EF4444'
+    id: "aggressive",
+    name: "The Aggressive VC",
+    avatar: "💼",
+    status: "active",
+    color: "#EF4444",
   },
   {
-    id: 'friendly',
-    name: 'The Friendly Angel',
-    avatar: '😊',
-    status: 'active',
-    color: '#10B981'
+    id: "friendly",
+    name: "The Friendly Angel",
+    avatar: "😊",
+    status: "active",
+    color: "#10B981",
   },
   {
-    id: 'skeptic',
-    name: 'The Skeptic',
-    avatar: '🤔',
-    status: 'active',
-    color: '#F59E0B'
-  }
+    id: "skeptic",
+    name: "The Skeptic",
+    avatar: "🤔",
+    status: "active",
+    color: "#F59E0B",
+  },
 ];
 
 const mockTranscript = [
-  { speaker: 'You', text: 'Hello everyone, today I\'d like to present...' },
-  { speaker: 'The Skeptic', text: 'What\'s your customer acquisition cost?' },
+  { speaker: "You", text: "Hello everyone, today I'd like to present..." },
+  { speaker: "The Skeptic", text: "What's your customer acquisition cost?" },
 ];
 
 export default function LivePitchRoom() {
@@ -50,21 +51,26 @@ export default function LivePitchRoom() {
   const [isPaused, setIsPaused] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [currentSlide, setCurrentSlide] = useState(1);
-  const [chatMessage, setChatMessage] = useState('');
+  const [chatMessage, setChatMessage] = useState("");
   const [elapsedTime, setElapsedTime] = useState(0);
-  
+  const [transcript, setTranscript] = useState(mockTranscript);
+  const { token, user } = useUser();
+
+  const { roomId: roomId } = useParams();
+  const socketRef = useRef<WebSocket | null>(null);
+
   // Simulated live scores
   const [scores, setScores] = useState({
     clarity: 72,
     confidence: 68,
-    marketFit: 85
+    marketFit: 85,
   });
 
   // Timer
   useEffect(() => {
     if (!isPaused) {
       const timer = setInterval(() => {
-        setElapsedTime(prev => prev + 1);
+        setElapsedTime((prev) => prev + 1);
       }, 1000);
       return () => clearInterval(timer);
     }
@@ -73,10 +79,16 @@ export default function LivePitchRoom() {
   // Simulate score changes
   useEffect(() => {
     const interval = setInterval(() => {
-      setScores(prev => ({
+      setScores((prev) => ({
         clarity: Math.min(100, prev.clarity + Math.floor(Math.random() * 3)),
-        confidence: Math.min(100, prev.confidence + Math.floor(Math.random() * 2)),
-        marketFit: Math.min(100, prev.marketFit + Math.floor(Math.random() * 2))
+        confidence: Math.min(
+          100,
+          prev.confidence + Math.floor(Math.random() * 2),
+        ),
+        marketFit: Math.min(
+          100,
+          prev.marketFit + Math.floor(Math.random() * 2),
+        ),
       }));
     }, 3000);
     return () => clearInterval(interval);
@@ -85,56 +97,151 @@ export default function LivePitchRoom() {
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
+    return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
+  // 1. Update the useEffect to handle incoming data
+  useEffect(() => {
+    if (!roomId || !token) return;
+
+    const socket = new WebSocket(
+      `ws://localhost:8000/api/room/ws/${roomId}?token=${token}`,
+    );
+
+    socket.onopen = () => console.log("Connected to room:", roomId);
+
+    socket.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        console.log("Received:", data);
+
+        // Listen for the "send-message" action broadcasted by the server
+        if (data.action === "send-message") {
+          setTranscript((prev) => [
+            ...prev,
+            { speaker: data.speaker, text: data.text },
+          ]);
+        }
+
+        // Pro Tip: You can also update scores in real-time here
+        if (data.type === "SCORE_UPDATE") {
+          setScores(data.scores);
+        }
+      } catch (err) {
+        console.error("Failed to parse socket message:", err);
+      }
+    };
+
+    socket.onclose = () => console.log("Disconnected");
+    socketRef.current = socket;
+
+    return () => socket.close();
+  }, [roomId, token]);
+
+  useEffect(() => {
+    async function fetchChats() {
+      const res = await fetch(
+        `http://localhost:8000/api/room/chats/${roomId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        },
+      );
+
+      const chatData = await res.json();
+
+      const formattedChats = chatData.map((chat: any) => ({
+        speaker: chat.speaker || "Unknown",
+        text: chat.content,
+      }));
+
+      setTranscript(formattedChats);
+    }
+
+    if (roomId && token) {
+      fetchChats();
+    }
+  }, [roomId, token]);
+  // 2. Clean up handleChat
+  function handleChat() {
+    if (chatMessage.trim() && socketRef.current) {
+      const payload = JSON.stringify({
+        action: "send-message",
+        roomId: roomId,
+        user_id: user?.id,
+        text: chatMessage,
+        speaker: user?.full_name || "You",
+      });
+
+      socketRef.current.send(payload);
+      setChatMessage("");
+    }
+  }
 
   return (
     <div className="h-screen bg-[#0D1117] text-white flex flex-col overflow-hidden">
       {/* Top Bar */}
       <div className="px-6 py-4 border-b border-white/10 flex items-center justify-between backdrop-blur-sm bg-[#0D1117]/80">
         <div className="flex items-center gap-4">
-          <Link to="/dashboard" className="text-gray-400 hover:text-white transition-colors">
+          <Link
+            to="/dashboard"
+            className="text-gray-400 hover:text-white transition-colors"
+          >
             <ChevronLeft className="w-5 h-5" />
           </Link>
           <div>
             <h2 className="text-lg">AI Investor Panel</h2>
-            <div className="text-sm text-gray-400">Session Time: {formatTime(elapsedTime)}</div>
+            <div className="text-sm text-gray-400">
+              Session Time: {formatTime(elapsedTime)}
+            </div>
           </div>
         </div>
-        
+
         <div className="flex items-center gap-3">
           {/* Controls */}
           <button
             onClick={() => setIsVideoOn(!isVideoOn)}
             className={`p-3 rounded-xl transition-all ${
-              isVideoOn 
-                ? 'bg-white/10 hover:bg-white/20' 
-                : 'bg-red-500/20 border border-red-500/50'
+              isVideoOn
+                ? "bg-white/10 hover:bg-white/20"
+                : "bg-red-500/20 border border-red-500/50"
             }`}
           >
-            {isVideoOn ? <Video className="w-5 h-5" /> : <VideoOff className="w-5 h-5 text-red-500" />}
+            {isVideoOn ? (
+              <Video className="w-5 h-5" />
+            ) : (
+              <VideoOff className="w-5 h-5 text-red-500" />
+            )}
           </button>
-          
+
           <button
             onClick={() => setIsMicOn(!isMicOn)}
             className={`p-3 rounded-xl transition-all ${
-              isMicOn 
-                ? 'bg-white/10 hover:bg-white/20' 
-                : 'bg-red-500/20 border border-red-500/50'
+              isMicOn
+                ? "bg-white/10 hover:bg-white/20"
+                : "bg-red-500/20 border border-red-500/50"
             }`}
           >
-            {isMicOn ? <Mic className="w-5 h-5" /> : <MicOff className="w-5 h-5 text-red-500" />}
+            {isMicOn ? (
+              <Mic className="w-5 h-5" />
+            ) : (
+              <MicOff className="w-5 h-5 text-red-500" />
+            )}
           </button>
 
           <button
             onClick={() => setIsPaused(!isPaused)}
             className="px-4 py-3 rounded-xl bg-[#3B82F6]/20 border border-[#3B82F6]/50 hover:bg-[#3B82F6]/30 transition-all flex items-center gap-2"
           >
-            {isPaused ? <Play className="w-5 h-5" /> : <Pause className="w-5 h-5" />}
-            {isPaused ? 'Resume' : 'Pause'}
+            {isPaused ? (
+              <Play className="w-5 h-5" />
+            ) : (
+              <Pause className="w-5 h-5" />
+            )}
+            {isPaused ? "Resume" : "Pause"}
           </button>
 
-          <Link 
+          <Link
             to="/analytics"
             className="px-4 py-3 rounded-xl bg-red-500/20 border border-red-500/50 hover:bg-red-500/30 transition-all"
           >
@@ -176,11 +283,15 @@ export default function LivePitchRoom() {
             <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200">
               <div className="text-center">
                 <div className="text-6xl text-gray-400 mb-4">📊</div>
-                <div className="text-2xl text-gray-700 mb-2">Slide {currentSlide} of 10</div>
-                <div className="text-gray-500">Your pitch deck appears here</div>
+                <div className="text-2xl text-gray-700 mb-2">
+                  Slide {currentSlide} of 10
+                </div>
+                <div className="text-gray-500">
+                  Your pitch deck appears here
+                </div>
               </div>
             </div>
-            
+
             {/* Slide Navigation */}
             <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2">
               <button
@@ -208,22 +319,24 @@ export default function LivePitchRoom() {
         <div className="w-[400px] border-l border-white/10 flex flex-col">
           {/* AI Investor Avatars */}
           <div className="p-6 space-y-4 border-b border-white/10">
-            <h3 className="text-sm text-gray-400 uppercase tracking-wider mb-4">Investor Panel</h3>
+            <h3 className="text-sm text-gray-400 uppercase tracking-wider mb-4">
+              Investor Panel
+            </h3>
             {investors.map((investor) => (
               <motion.div
                 key={investor.id}
                 className="p-4 rounded-2xl bg-white/5 backdrop-blur-sm border border-white/10"
                 animate={{
                   borderColor: [
-                    'rgba(255,255,255,0.1)',
+                    "rgba(255,255,255,0.1)",
                     `${investor.color}40`,
-                    'rgba(255,255,255,0.1)'
-                  ]
+                    "rgba(255,255,255,0.1)",
+                  ],
                 }}
                 transition={{
                   duration: 3,
                   repeat: Infinity,
-                  ease: "easeInOut"
+                  ease: "easeInOut",
                 }}
               >
                 <div className="flex items-center gap-3">
@@ -242,11 +355,25 @@ export default function LivePitchRoom() {
 
           {/* Live Scores */}
           <div className="p-6 flex-1 overflow-y-auto">
-            <h3 className="text-sm text-gray-400 uppercase tracking-wider mb-6">Live Scoring</h3>
+            <h3 className="text-sm text-gray-400 uppercase tracking-wider mb-6">
+              Live Scoring
+            </h3>
             <div className="space-y-6">
-              <ScoreCircle label="Clarity" score={scores.clarity} color="#3B82F6" />
-              <ScoreCircle label="Confidence" score={scores.confidence} color="#7C3AED" />
-              <ScoreCircle label="Market Fit" score={scores.marketFit} color="#10B981" />
+              <ScoreCircle
+                label="Clarity"
+                score={scores.clarity}
+                color="#3B82F6"
+              />
+              <ScoreCircle
+                label="Confidence"
+                score={scores.confidence}
+                color="#7C3AED"
+              />
+              <ScoreCircle
+                label="Market Fit"
+                score={scores.marketFit}
+                color="#10B981"
+              />
             </div>
           </div>
         </div>
@@ -256,15 +383,18 @@ export default function LivePitchRoom() {
       <div className="px-6 py-4 border-t border-white/10 backdrop-blur-sm bg-[#0D1117]/80">
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1">
-            <div className="text-xs text-gray-400 uppercase tracking-wider mb-2">Live Transcription</div>
+            <div className="text-xs text-gray-400 uppercase tracking-wider mb-2">
+              Live Transcription
+            </div>
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
               <p className="text-sm text-gray-300">
-                "...and that's why our solution is uniquely positioned to capture this market opportunity..."
+                "...and that's why our solution is uniquely positioned to
+                capture this market opportunity..."
               </p>
             </div>
           </div>
-          
+
           <button
             onClick={() => setIsChatOpen(!isChatOpen)}
             className="p-3 rounded-xl bg-white/10 hover:bg-white/20 transition-all relative"
@@ -279,10 +409,10 @@ export default function LivePitchRoom() {
       <AnimatePresence>
         {isChatOpen && (
           <motion.div
-            initial={{ x: '100%' }}
+            initial={{ x: "100%" }}
             animate={{ x: 0 }}
-            exit={{ x: '100%' }}
-            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+            exit={{ x: "100%" }}
+            transition={{ type: "spring", damping: 25, stiffness: 200 }}
             className="fixed right-0 top-0 bottom-0 w-[400px] bg-[#0D1117] border-l border-white/10 flex flex-col z-50"
           >
             {/* Chat Header */}
@@ -298,7 +428,7 @@ export default function LivePitchRoom() {
 
             {/* Chat Messages */}
             <div className="flex-1 p-4 space-y-4 overflow-y-auto">
-              {mockTranscript.map((msg, idx) => (
+              {transcript.map((msg, idx) => (
                 <div key={idx} className="space-y-1">
                   <div className="text-xs text-gray-400">{msg.speaker}</div>
                   <div className="p-3 rounded-xl bg-white/5 border border-white/10 text-sm">
@@ -318,7 +448,10 @@ export default function LivePitchRoom() {
                   placeholder="Type a note..."
                   className="flex-1 px-4 py-3 rounded-xl bg-white/5 border border-white/10 focus:border-[#3B82F6]/50 focus:outline-none transition-colors"
                 />
-                <button className="p-3 rounded-xl bg-gradient-to-r from-[#3B82F6] to-[#7C3AED] hover:shadow-[0_0_20px_rgba(59,130,246,0.5)] transition-all">
+                <button
+                  onClick={handleChat}
+                  className="p-3 rounded-xl bg-gradient-to-r from-[#3B82F6] to-[#7C3AED] hover:shadow-[0_0_20px_rgba(59,130,246,0.5)] transition-all"
+                >
                   <Send className="w-5 h-5" />
                 </button>
               </div>
@@ -330,7 +463,15 @@ export default function LivePitchRoom() {
   );
 }
 
-function ScoreCircle({ label, score, color }: { label: string; score: number; color: string }) {
+function ScoreCircle({
+  label,
+  score,
+  color,
+}: {
+  label: string;
+  score: number;
+  color: string;
+}) {
   const circumference = 2 * Math.PI * 45;
   const offset = circumference - (score / 100) * circumference;
 
@@ -358,7 +499,7 @@ function ScoreCircle({ label, score, color }: { label: string; score: number; co
             animate={{ strokeDashoffset: offset }}
             transition={{ duration: 1, ease: "easeOut" }}
             style={{
-              filter: `drop-shadow(0 0 8px ${color})`
+              filter: `drop-shadow(0 0 8px ${color})`,
             }}
           />
         </svg>
@@ -369,7 +510,7 @@ function ScoreCircle({ label, score, color }: { label: string; score: number; co
       <div className="flex-1">
         <div className="text-sm mb-1">{label}</div>
         <div className="text-xs text-gray-400">
-          {score >= 80 ? 'Excellent' : score >= 60 ? 'Good' : 'Needs work'}
+          {score >= 80 ? "Excellent" : score >= 60 ? "Good" : "Needs work"}
         </div>
       </div>
     </div>

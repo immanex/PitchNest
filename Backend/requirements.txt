@@ -7,3 +7,5 @@ passlib
 python-multipart
 bcrypt
 asyncpg
+fastapi-mail
+python-jose

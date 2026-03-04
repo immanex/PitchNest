@@ -29,8 +29,6 @@ async def get_current_user(
             algorithms=[settings.ALGORITHM],
         )
 
-        print("Decoded payload:", payload)
-
     except Exception as e:
         raise credentials_exception
 

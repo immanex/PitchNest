@@ -1,10 +1,10 @@
-import { Link } from 'react-router';
-import { motion } from 'motion/react';
-import { 
-  Sparkles, 
-  Play, 
-  TrendingUp, 
-  Target, 
+import { Link } from "react-router";
+import { motion } from "motion/react";
+import {
+  Sparkles,
+  Play,
+  TrendingUp,
+  Target,
   Clock,
   BarChart3,
   Zap,
@@ -15,61 +15,66 @@ import {
   Search,
   Lightbulb,
   Award,
-  Calendar
-} from 'lucide-react';
+  Calendar,
+} from "lucide-react";
+import { useUser } from "../context/UserContext";
 
 const recentPitches = [
   {
     id: 1,
-    title: 'Series A Fundraising Pitch',
-    date: '2 hours ago',
-    mode: 'AI Investor Panel',
+    title: "Series A Fundraising Pitch",
+    date: "2 hours ago",
+    mode: "AI Investor Panel",
     score: 82,
-    duration: '7:42',
-    status: 'completed'
+    duration: "7:42",
+    status: "completed",
   },
   {
     id: 2,
-    title: 'Product Demo Practice',
-    date: 'Yesterday',
-    mode: 'Practice Mode',
+    title: "Product Demo Practice",
+    date: "Yesterday",
+    mode: "Practice Mode",
     score: 76,
-    duration: '5:12',
-    status: 'completed'
+    duration: "5:12",
+    status: "completed",
   },
   {
     id: 3,
-    title: 'Pitch Competition Prep',
-    date: '2 days ago',
-    mode: 'Coach Mode',
+    title: "Pitch Competition Prep",
+    date: "2 days ago",
+    mode: "Coach Mode",
     score: 88,
-    duration: '8:30',
-    status: 'completed'
+    duration: "8:30",
+    status: "completed",
   },
 ];
 
 const aiRecommendations = [
   {
-    title: 'Work on Filler Words',
-    description: 'You used "um" and "uh" 23 times in your last session. Try pausing instead.',
-    priority: 'high',
-    icon: <Zap className="w-5 h-5" />
+    title: "Work on Filler Words",
+    description:
+      'You used "um" and "uh" 23 times in your last session. Try pausing instead.',
+    priority: "high",
+    icon: <Zap className="w-5 h-5" />,
   },
   {
-    title: 'Improve Financial Clarity',
-    description: 'Investors asked 4 follow-up questions about your unit economics. Review your metrics.',
-    priority: 'medium',
-    icon: <Target className="w-5 h-5" />
+    title: "Improve Financial Clarity",
+    description:
+      "Investors asked 4 follow-up questions about your unit economics. Review your metrics.",
+    priority: "medium",
+    icon: <Target className="w-5 h-5" />,
   },
   {
-    title: 'Practice Market Sizing',
-    description: 'Your market size explanation needs more supporting data. Add 2-3 data points.',
-    priority: 'medium',
-    icon: <BarChart3 className="w-5 h-5" />
+    title: "Practice Market Sizing",
+    description:
+      "Your market size explanation needs more supporting data. Add 2-3 data points.",
+    priority: "medium",
+    icon: <BarChart3 className="w-5 h-5" />,
   },
 ];
 
 export default function Dashboard() {
+  const { user, logout } = useUser();
   return (
     <div className="min-h-screen bg-[#0D1117] text-white">
       {/* Background Effects */}
@@ -83,7 +88,7 @@ export default function Dashboard() {
           transition={{
             duration: 8,
             repeat: Infinity,
-            ease: "easeInOut"
+            ease: "easeInOut",
           }}
         />
         <motion.div
@@ -96,7 +101,7 @@ export default function Dashboard() {
             duration: 10,
             repeat: Infinity,
             ease: "easeInOut",
-            delay: 1
+            delay: 1,
           }}
         />
       </div>
@@ -120,7 +125,7 @@ export default function Dashboard() {
                 className="pl-10 pr-4 py-2 rounded-xl bg-white/5 border border-white/10 focus:border-[#3B82F6]/50 focus:outline-none transition-colors w-64"
               />
             </div>
-            
+
             <button className="p-2 rounded-xl bg-white/5 hover:bg-white/10 transition-colors relative">
               <Bell className="w-5 h-5" />
               <span className="absolute top-1 right-1 w-2 h-2 bg-[#3B82F6] rounded-full" />
@@ -134,7 +139,7 @@ export default function Dashboard() {
 
             <div className="flex items-center gap-3 pl-4 border-l border-white/10">
               <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#3B82F6] to-[#7C3AED] flex items-center justify-center">
-                JD
+                {user?.full_name ? user.full_name[0] : "U"}
               </div>
             </div>
           </div>
@@ -144,8 +149,10 @@ export default function Dashboard() {
       <div className="relative z-10 max-w-7xl mx-auto px-6 py-8">
         {/* Welcome Section */}
         <div className="mb-8">
-          <h1 className="text-4xl font-bold mb-2">Welcome back, John! 👋</h1>
-          <p className="text-gray-400 text-lg">Ready to perfect your pitch today?</p>
+          <h1 className="text-4xl font-bold mb-2">Welcome back, {user?.full_name}! 👋</h1>
+          <p className="text-gray-400 text-lg">
+            Ready to perfect your pitch today?
+          </p>
         </div>
 
         {/* Performance Snapshot */}
@@ -229,7 +236,10 @@ export default function Dashboard() {
             <div className="p-6 rounded-2xl bg-white/5 backdrop-blur-sm border border-white/10">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-2xl font-semibold">Recent Pitches</h2>
-                <Link to="/analytics" className="text-sm text-[#3B82F6] hover:text-[#7C3AED] transition-colors flex items-center gap-1">
+                <Link
+                  to="/analytics"
+                  className="text-sm text-[#3B82F6] hover:text-[#7C3AED] transition-colors flex items-center gap-1"
+                >
                   View all
                   <ChevronRight className="w-4 h-4" />
                 </Link>
@@ -300,20 +310,26 @@ export default function Dashboard() {
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ duration: 0.3, delay: idx * 0.1 }}
                     className={`p-4 rounded-xl border transition-all ${
-                      rec.priority === 'high'
-                        ? 'bg-red-500/10 border-red-500/30'
-                        : 'bg-yellow-500/10 border-yellow-500/30'
+                      rec.priority === "high"
+                        ? "bg-red-500/10 border-red-500/30"
+                        : "bg-yellow-500/10 border-yellow-500/30"
                     }`}
                   >
                     <div className="flex items-start gap-3">
-                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                        rec.priority === 'high' ? 'bg-red-500/20 text-red-400' : 'bg-yellow-500/20 text-yellow-400'
-                      }`}>
+                      <div
+                        className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                          rec.priority === "high"
+                            ? "bg-red-500/20 text-red-400"
+                            : "bg-yellow-500/20 text-yellow-400"
+                        }`}
+                      >
                         {rec.icon}
                       </div>
                       <div className="flex-1">
                         <h4 className="font-semibold mb-1">{rec.title}</h4>
-                        <p className="text-sm text-gray-400">{rec.description}</p>
+                        <p className="text-sm text-gray-400">
+                          {rec.description}
+                        </p>
                       </div>
                     </div>
                   </motion.div>
@@ -350,19 +366,19 @@ export default function Dashboard() {
   );
 }
 
-function PerformanceCard({ 
-  icon, 
-  label, 
-  value, 
-  change, 
-  trend, 
-  color 
-}: { 
-  icon: React.ReactNode; 
-  label: string; 
-  value: string; 
+function PerformanceCard({
+  icon,
+  label,
+  value,
+  change,
+  trend,
+  color,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
   change: string;
-  trend?: 'up' | 'down';
+  trend?: "up" | "down";
   color: string;
 }) {
   return (
@@ -376,17 +392,23 @@ function PerformanceCard({
         className="w-12 h-12 rounded-xl flex items-center justify-center mb-4"
         style={{
           background: `${color}20`,
-          color: color
+          color: color,
         }}
       >
         {icon}
       </div>
       <div className="text-sm text-gray-400 mb-1">{label}</div>
       <div className="text-3xl font-bold mb-2">{value}</div>
-      <div className={`text-xs flex items-center gap-1 ${
-        trend === 'up' ? 'text-green-400' : trend === 'down' ? 'text-red-400' : 'text-gray-400'
-      }`}>
-        {trend === 'up' && <TrendingUp className="w-3 h-3" />}
+      <div
+        className={`text-xs flex items-center gap-1 ${
+          trend === "up"
+            ? "text-green-400"
+            : trend === "down"
+              ? "text-red-400"
+              : "text-gray-400"
+        }`}
+      >
+        {trend === "up" && <TrendingUp className="w-3 h-3" />}
         {change}
       </div>
     </motion.div>

@@ -1,11 +1,26 @@
-import { Link } from 'react-router';
-import { motion } from 'motion/react';
-import { Sparkles, Brain, Zap, ChevronRight, Video, BarChart3, Users, Check, MessageSquare, Mail, Phone, HelpCircle } from 'lucide-react';
+import { Link } from "react-router";
+import { motion } from "motion/react";
+import {
+  Sparkles,
+  Brain,
+  Zap,
+  ChevronRight,
+  Video,
+  BarChart3,
+  Users,
+  Check,
+  MessageSquare,
+  Mail,
+  Phone,
+  HelpCircle,
+} from "lucide-react";
 
+import { useUser } from "../context/UserContext";
 export default function Landing() {
+  const { user } = useUser();
   const scrollToSection = (id: string) => {
     const element = document.getElementById(id);
-    element?.scrollIntoView({ behavior: 'smooth' });
+    element?.scrollIntoView({ behavior: "smooth" });
   };
 
   return (
@@ -22,7 +37,7 @@ export default function Landing() {
           transition={{
             duration: 8,
             repeat: Infinity,
-            ease: "easeInOut"
+            ease: "easeInOut",
           }}
         />
         <motion.div
@@ -35,10 +50,10 @@ export default function Landing() {
             duration: 10,
             repeat: Infinity,
             ease: "easeInOut",
-            delay: 1
+            delay: 1,
           }}
         />
-        
+
         {/* Animated circuit/wave lines */}
         <svg className="absolute inset-0 w-full h-full opacity-10">
           <motion.path
@@ -57,7 +72,12 @@ export default function Landing() {
             fill="none"
             initial={{ pathLength: 0, opacity: 0 }}
             animate={{ pathLength: 1, opacity: 0.3 }}
-            transition={{ duration: 4, repeat: Infinity, ease: "linear", delay: 0.5 }}
+            transition={{
+              duration: 4,
+              repeat: Infinity,
+              ease: "linear",
+              delay: 0.5,
+            }}
           />
         </svg>
       </div>
@@ -70,34 +90,55 @@ export default function Landing() {
           </div>
           <span className="text-xl font-semibold">PitchNest-Live</span>
         </div>
-        
+
         <div className="hidden md:flex items-center gap-8">
-          <button onClick={() => scrollToSection('features')} className="text-gray-300 hover:text-white transition-colors">
+          <button
+            onClick={() => scrollToSection("features")}
+            className="text-gray-300 hover:text-white transition-colors"
+          >
             Features
           </button>
-          <button onClick={() => scrollToSection('pricing')} className="text-gray-300 hover:text-white transition-colors">
+          <button
+            onClick={() => scrollToSection("pricing")}
+            className="text-gray-300 hover:text-white transition-colors"
+          >
             Pricing
           </button>
-          <button onClick={() => scrollToSection('about')} className="text-gray-300 hover:text-white transition-colors">
+          <button
+            onClick={() => scrollToSection("about")}
+            className="text-gray-300 hover:text-white transition-colors"
+          >
             About
           </button>
-          <button onClick={() => scrollToSection('contact')} className="text-gray-300 hover:text-white transition-colors">
+          <button
+            onClick={() => scrollToSection("contact")}
+            className="text-gray-300 hover:text-white transition-colors"
+          >
             Contact
           </button>
         </div>
-
-        <div className="flex items-center gap-4">
-          <Link to="/login">
-            <button className="px-4 py-2 text-gray-300 hover:text-white transition-colors">
-              Login
-            </button>
+        {user ? (
+          <Link to="/settings">
+            <div className="flex items-center gap-3 pl-4  border-white/10">
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#3B82F6] to-[#7C3AED] flex items-center justify-center">
+                {user?.full_name ? user.full_name[0] : "U"}
+              </div>
+            </div>
           </Link>
-          <Link to="/signup">
-            <button className="px-6 py-2 rounded-xl bg-white/10 backdrop-blur-sm border border-white/20 hover:bg-white/20 transition-all">
-              Sign Up
-            </button>
-          </Link>
-        </div>
+        ) : (
+          <div className="flex items-center gap-4">
+            <Link to="/login">
+              <button className="px-4 py-2 text-gray-300 hover:text-white transition-colors">
+                Login
+              </button>
+            </Link>
+            <Link to="/signup">
+              <button className="px-6 py-2 rounded-xl bg-white/10 backdrop-blur-sm border border-white/20 hover:bg-white/20 transition-all">
+                Sign Up
+              </button>
+            </Link>
+          </div>
+        )}
       </nav>
 
       {/* Hero Section */}
@@ -110,32 +151,48 @@ export default function Landing() {
           >
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#3B82F6]/10 border border-[#3B82F6]/30 mb-6">
               <Brain className="w-4 h-4 text-[#3B82F6]" />
-              <span className="text-sm text-gray-300">AI-Powered Pitch Simulation</span>
+              <span className="text-sm text-gray-300">
+                AI-Powered Pitch Simulation
+              </span>
             </div>
-            
+
             <h1 className="text-6xl font-bold mb-6 leading-tight">
-              Perfect Your Pitch with{' '}
+              Perfect Your Pitch with{" "}
               <span className="bg-gradient-to-r from-[#3B82F6] to-[#7C3AED] bg-clip-text text-transparent">
                 AI Investors
               </span>
             </h1>
-            
+
             <p className="text-xl text-gray-400 mb-10 max-w-2xl mx-auto">
-              Practice pitching to AI-powered investor personas. Get real-time feedback, 
-              improve your delivery, and close deals with confidence.
+              Practice pitching to AI-powered investor personas. Get real-time
+              feedback, improve your delivery, and close deals with confidence.
             </p>
-            
-            <Link to="/signup">
-              <motion.button
-                className="group px-8 py-4 rounded-2xl bg-gradient-to-r from-[#3B82F6] to-[#7C3AED] hover:shadow-[0_0_40px_rgba(59,130,246,0.5)] transition-all duration-300 flex items-center gap-3 mx-auto"
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-              >
-                <Zap className="w-5 h-5" />
-                <span className="text-lg">Start Pitching</span>
-                <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-              </motion.button>
-            </Link>
+
+            {user ? (
+              <Link to="/dashboard">
+                <motion.button
+                  className="group px-8 py-4 rounded-2xl bg-gradient-to-r from-[#3B82F6] to-[#7C3AED] hover:shadow-[0_0_40px_rgba(59,130,246,0.5)] transition-all duration-300 flex items-center gap-3 mx-auto"
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  <Zap className="w-5 h-5" />
+                  <span className="text-lg"> Go to Dashboard</span>
+                  <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                </motion.button>
+              </Link>
+            ) : (
+              <Link to="/signup">
+                <motion.button
+                  className="group px-8 py-4 rounded-2xl bg-gradient-to-r from-[#3B82F6] to-[#7C3AED] hover:shadow-[0_0_40px_rgba(59,130,246,0.5)] transition-all duration-300 flex items-center gap-3 mx-auto"
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  <Zap className="w-5 h-5" />
+                  <span className="text-lg"> Go to Dashboard</span>
+                  <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                </motion.button>
+              </Link>
+            )}
           </motion.div>
         </div>
 
@@ -166,13 +223,17 @@ export default function Landing() {
       </div>
 
       {/* About Section */}
-      <section id="about" className="relative z-10 px-6 py-24 bg-white/5 backdrop-blur-sm border-y border-white/10">
+      <section
+        id="about"
+        className="relative z-10 px-6 py-24 bg-white/5 backdrop-blur-sm border-y border-white/10"
+      >
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16">
             <h2 className="text-4xl font-bold mb-4">About PitchNest-Live</h2>
             <p className="text-gray-400 text-lg max-w-2xl mx-auto">
-              The world's first AI-powered pitch simulation platform designed to help founders, 
-              students, and coaches master the art of fundraising.
+              The world's first AI-powered pitch simulation platform designed to
+              help founders, students, and coaches master the art of
+              fundraising.
             </p>
           </div>
 
@@ -180,13 +241,15 @@ export default function Landing() {
             <div className="space-y-6">
               <h3 className="text-2xl font-semibold">Our Mission</h3>
               <p className="text-gray-400">
-                We believe that every entrepreneur deserves the opportunity to practice and perfect 
-                their pitch before facing real investors. PitchNest-Live uses cutting-edge AI to 
-                simulate realistic investor interactions, providing immediate, actionable feedback.
+                We believe that every entrepreneur deserves the opportunity to
+                practice and perfect their pitch before facing real investors.
+                PitchNest-Live uses cutting-edge AI to simulate realistic
+                investor interactions, providing immediate, actionable feedback.
               </p>
               <p className="text-gray-400">
-                Whether you're preparing for your first pitch competition or raising your Series A, 
-                our platform helps you build confidence and refine your story.
+                Whether you're preparing for your first pitch competition or
+                raising your Series A, our platform helps you build confidence
+                and refine your story.
               </p>
             </div>
 
@@ -204,8 +267,12 @@ export default function Landing() {
       <section id="pricing" className="relative z-10 px-6 py-24">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16">
-            <h2 className="text-4xl font-bold mb-4">Simple, Transparent Pricing</h2>
-            <p className="text-gray-400 text-lg">Choose the plan that fits your needs</p>
+            <h2 className="text-4xl font-bold mb-4">
+              Simple, Transparent Pricing
+            </h2>
+            <p className="text-gray-400 text-lg">
+              Choose the plan that fits your needs
+            </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -217,7 +284,7 @@ export default function Landing() {
                 "3 practice sessions/month",
                 "Basic AI feedback",
                 "Session recordings",
-                "Email support"
+                "Email support",
               ]}
               cta="Get Started"
               link="/signup"
@@ -232,7 +299,7 @@ export default function Landing() {
                 "All investor personas",
                 "Analytics dashboard",
                 "Priority support",
-                "PDF export"
+                "PDF export",
               ]}
               cta="Start Free Trial"
               link="/signup"
@@ -248,7 +315,7 @@ export default function Landing() {
                 "Team analytics",
                 "Custom AI personas",
                 "Dedicated support",
-                "API access"
+                "API access",
               ]}
               cta="Contact Sales"
               link="/signup"
@@ -258,12 +325,17 @@ export default function Landing() {
       </section>
 
       {/* FAQ Section */}
-      <section id="contact" className="relative z-10 px-6 py-24 bg-white/5 backdrop-blur-sm border-y border-white/10">
+      <section
+        id="contact"
+        className="relative z-10 px-6 py-24 bg-white/5 backdrop-blur-sm border-y border-white/10"
+      >
         <div className="max-w-7xl mx-auto">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-16">
             {/* FAQ */}
             <div>
-              <h2 className="text-3xl font-bold mb-8">Frequently Asked Questions</h2>
+              <h2 className="text-3xl font-bold mb-8">
+                Frequently Asked Questions
+              </h2>
               <div className="space-y-6">
                 <FAQItem
                   question="How does the AI simulation work?"
@@ -288,7 +360,8 @@ export default function Landing() {
             <div>
               <h2 className="text-3xl font-bold mb-8">Get in Touch</h2>
               <p className="text-gray-400 mb-8">
-                Have questions? We're here to help. Reach out to our team and we'll get back to you within 24 hours.
+                Have questions? We're here to help. Reach out to our team and
+                we'll get back to you within 24 hours.
               </p>
 
               <div className="space-y-6">
@@ -336,7 +409,9 @@ export default function Landing() {
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#3B82F6] to-[#7C3AED] flex items-center justify-center">
               <Sparkles className="w-5 h-5" />
             </div>
-            <span className="text-lg font-semibold text-white">PitchNest-Live</span>
+            <span className="text-lg font-semibold text-white">
+              PitchNest-Live
+            </span>
           </div>
           <p className="text-sm">© 2026 PitchNest-Live. All rights reserved.</p>
         </div>
@@ -345,7 +420,15 @@ export default function Landing() {
   );
 }
 
-function FeatureCard({ icon, title, description }: { icon: React.ReactNode; title: string; description: string }) {
+function FeatureCard({
+  icon,
+  title,
+  description,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+}) {
   return (
     <div className="p-6 rounded-2xl bg-white/5 backdrop-blur-sm border border-white/10 hover:bg-white/10 hover:border-[#3B82F6]/30 transition-all duration-300 group">
       <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#3B82F6]/20 to-[#7C3AED]/20 flex items-center justify-center text-[#3B82F6] mb-4 group-hover:shadow-[0_0_20px_rgba(59,130,246,0.3)] transition-shadow">
@@ -368,41 +451,43 @@ function StatBox({ label, value }: { label: string; value: string }) {
   );
 }
 
-function PricingCard({ 
-  name, 
-  price, 
-  period, 
-  features, 
-  cta, 
-  link, 
-  popular 
-}: { 
-  name: string; 
-  price: string; 
-  period: string; 
-  features: string[]; 
-  cta: string; 
+function PricingCard({
+  name,
+  price,
+  period,
+  features,
+  cta,
+  link,
+  popular,
+}: {
+  name: string;
+  price: string;
+  period: string;
+  features: string[];
+  cta: string;
   link: string;
   popular?: boolean;
 }) {
   return (
-    <div className={`p-8 rounded-3xl backdrop-blur-sm border transition-all duration-300 relative ${
-      popular 
-        ? 'bg-gradient-to-br from-[#3B82F6]/20 to-[#7C3AED]/20 border-[#3B82F6]/50 shadow-[0_0_40px_rgba(59,130,246,0.3)]' 
-        : 'bg-white/5 border-white/10 hover:border-white/20'
-    }`}>
+    <div
+      className={`p-8 rounded-3xl backdrop-blur-sm border transition-all duration-300 relative ${
+        popular
+          ? "bg-gradient-to-br from-[#3B82F6]/20 to-[#7C3AED]/20 border-[#3B82F6]/50 shadow-[0_0_40px_rgba(59,130,246,0.3)]"
+          : "bg-white/5 border-white/10 hover:border-white/20"
+      }`}
+    >
       {popular && (
         <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1 rounded-full bg-gradient-to-r from-[#3B82F6] to-[#7C3AED] text-sm">
           Most Popular
         </div>
       )}
-      
+
       <h3 className="text-2xl font-bold mb-2">{name}</h3>
       <div className="mb-6">
         <span className="text-4xl font-bold">{price}</span>
         <span className="text-gray-400">/{period}</span>
       </div>
-      
+
       <ul className="space-y-3 mb-8">
         {features.map((feature, idx) => (
           <li key={idx} className="flex items-start gap-3">
@@ -411,13 +496,15 @@ function PricingCard({
           </li>
         ))}
       </ul>
-      
+
       <Link to={link}>
-        <button className={`w-full px-6 py-3 rounded-xl transition-all ${
-          popular
-            ? 'bg-gradient-to-r from-[#3B82F6] to-[#7C3AED] hover:shadow-[0_0_30px_rgba(59,130,246,0.5)]'
-            : 'bg-white/10 border border-white/20 hover:bg-white/20'
-        }`}>
+        <button
+          className={`w-full px-6 py-3 rounded-xl transition-all ${
+            popular
+              ? "bg-gradient-to-r from-[#3B82F6] to-[#7C3AED] hover:shadow-[0_0_30px_rgba(59,130,246,0.5)]"
+              : "bg-white/10 border border-white/20 hover:bg-white/20"
+          }`}
+        >
           {cta}
         </button>
       </Link>
@@ -439,7 +526,15 @@ function FAQItem({ question, answer }: { question: string; answer: string }) {
   );
 }
 
-function ContactItem({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
+function ContactItem({
+  icon,
+  label,
+  value,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+}) {
   return (
     <div className="flex items-center gap-4 p-4 rounded-xl bg-white/5 backdrop-blur-sm border border-white/10">
       <div className="w-10 h-10 rounded-lg bg-[#3B82F6]/20 flex items-center justify-center text-[#3B82F6]">

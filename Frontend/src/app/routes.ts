@@ -43,6 +43,7 @@ export const router = createBrowserRouter([
   },
   {
     path: "/dashboard",
+
     Component: Dashboard,
   },
   {
@@ -50,7 +51,7 @@ export const router = createBrowserRouter([
     Component: ModeSelection,
   },
   {
-    path: "/pitch",
+    path: "/room/:roomId",
     Component: LivePitchRoom,
   },
   {
