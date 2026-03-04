@@ -48,6 +48,9 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
+    chats: Mapped[list["ChatMessage"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
 
     # Relationships
     profile: Mapped["UserProfile"] = relationship(
@@ -169,7 +172,30 @@ class Room(Base):
     members: Mapped[list["User"]] = relationship(
         "User", secondary=room_members, back_populates="rooms"
     )
+    chats: Mapped[list["ChatMessage"]] = relationship(
+        "ChatMessage", back_populates="room", cascade="all, delete-orphan"
+    )
 
     owner: Mapped["User"] = relationship(
         "User", back_populates="owned_rooms", foreign_keys=[owner_id]
     )
+
+
+class ChatMessage(Base):
+    __tablename__ = "chat_messages"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=generate_uuid)
+    room_id: Mapped[str] = mapped_column(
+        String, ForeignKey("rooms.id", ondelete="CASCADE")
+    )
+    user_id: Mapped[str | None] = mapped_column(
+        String, ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=True
+    )
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+
+    user: Mapped["User"] = relationship(back_populates="chats")
+    room: Mapped["Room"] = relationship(back_populates="chats")

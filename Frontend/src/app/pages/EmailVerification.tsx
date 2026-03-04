@@ -64,9 +64,9 @@ export default function EmailVerification() {
             Resend Verification Email
           </button>
 
-          <Link to="/profile-setup">
+          <Link to="/login">
             <button className="w-full px-6 py-3 rounded-xl bg-gradient-to-r from-[#3B82F6] to-[#7C3AED] hover:shadow-[0_0_30px_rgba(59,130,246,0.5)] transition-all">
-              Continue to Setup
+              Continue to Login
             </button>
           </Link>
         </motion.div>

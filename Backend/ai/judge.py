@@ -1,5 +1,7 @@
 def evaluate_pitch(transcript: str):
     word_count = len(transcript.split())
+    
+    
 
     score = min(word_count / 20, 10)
 

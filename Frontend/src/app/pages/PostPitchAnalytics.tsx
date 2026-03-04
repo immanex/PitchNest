@@ -55,7 +55,7 @@ export default function PostPitchAnalytics() {
         <div className="flex items-start justify-between mb-12">
           <div>
             <Link
-              to="/pitch"
+              to="/dashboard"
               className="inline-flex items-center gap-2 text-gray-400 hover:text-white transition-colors mb-4"
             >
               <ChevronLeft className="w-5 h-5" />
