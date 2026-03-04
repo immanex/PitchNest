@@ -1,9 +1,11 @@
 fastapi
 uvicorn
 pydantic_settings
-'pydantic[email]'
+pydantic[email]
 PyJWT
 passlib
 python-multipart
 bcrypt
 asyncpg
+sqlalchemy[asyncio]
+psycopg2-binary

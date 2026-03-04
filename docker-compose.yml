@@ -1,0 +1,37 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: pitchnest
+      POSTGRES_PASSWORD: pitchnest123
+      POSTGRES_DB: pitchnest
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pitchnest"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: ./Backend
+    environment:
+      DATABASE_URL: postgresql+asyncpg://pitchnest:pitchnest123@postgres:5432/pitchnest
+      SECRET_KEY: eddc9ebbba83fa05d6cb67f6a334667c9de1827c2783caa64b24fb478395fb5e
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    build: ./Frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
