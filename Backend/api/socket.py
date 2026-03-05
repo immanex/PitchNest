@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from db.database import AsyncSessionLocal, get_db
-from db.models import User, Room
+from db.models import Pitch, User, Room
 from api.deps import get_current_active_user
 from schemas.socket import RoomCreate
 from db.models import User, ChatMessage
@@ -58,19 +58,54 @@ async def test():
 ## room creation endpoint
 @router.post("/create")
 async def create_room(
-    room_data: RoomCreate,
+    room_data: dict,
     current_user: Annotated[User, Depends(get_current_active_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    room_id = (
-        current_user.id + "-" + str(uuid.uuid4())[:8]
-    )  # unique room id based on user and random uuid
+
+    room_id = current_user.id + "-" + str(uuid.uuid4())[:8]
 
     room = Room(id=room_id, owner_id=current_user.id)
+
+    pitch = Pitch(
+        user_id=current_user.id,
+        room_id=room_id,
+        industry=room_data.get("industry"),
+        startup_type=room_data.get("startup_type"),
+        experience_level=room_data.get("experience_level"),
+        mode=room_data.get("modeId", "Practice"),
+    )
+
     db.add(room)
+    db.add(pitch)
+
     await db.commit()
-    await db.refresh(room)
+
     return {"room_id": room_id}
+
+
+@router.put("/end/{room_id}")
+async def end_session(
+    room_id: str,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    query = select(Room).where(Room.id == room_id)
+    result = await db.execute(query)
+    room = result.scalar_one_or_none()
+
+    if room is None:
+        return {"error": "Room not found"}
+
+    if room.owner_id != current_user.id:
+        return {"error": "Unauthorized"}
+
+    # Here you can also update the pitch with final scores, feedback, etc.
+
+    await db.delete(room)
+    await db.commit()
+
+    return {"message": "Session ended successfully"}
 
 
 @router.get("/rooms")
@@ -78,13 +113,12 @@ async def list_rooms(
     current_user: Annotated[User, Depends(get_current_active_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    query = select(Room).where(Room.owner_id == current_user.id)
+    query = select(Room).where(Room.owner_id == current_user.id and Room.closed == False)
     result = await db.execute(query)
     rooms = result.scalars().all()
-    return {"rooms": [{"room_id": room.id} for room in rooms]}
-
-
-from sqlalchemy.orm import selectinload
+    return {
+        "rooms": [{"room_id": room.id, "owner_id": room.owner_id} for room in rooms]
+    }
 
 
 @router.get("/chats/{room_id}")

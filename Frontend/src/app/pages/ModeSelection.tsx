@@ -2,6 +2,7 @@ import { Link } from "react-router";
 import { motion } from "motion/react";
 import { Users, Dumbbell, Zap, ArrowRight, ChevronLeft } from "lucide-react";
 import { useUser } from "../context/UserContext";
+import { useLocation } from "react-router-dom";
 
 const modes = [
   {
@@ -33,8 +34,10 @@ const modes = [
   },
 ];
 
-
 export default function ModeSelection() {
+  const location = useLocation();
+
+  const { industry, startupType, experience } = location.state || {};
   const { user } = useUser();
   async function handlePitchSelection(modeId: string) {
     // Store selected mode in localStorage or context
@@ -45,13 +48,16 @@ export default function ModeSelection() {
         "Content-Type": "application/json",
         Authorization: `Bearer ${localStorage.getItem("token")}`,
       },
-      body: JSON.stringify({ user_id: user?.id}),
+      body: JSON.stringify({
+        user_id: user?.id,
+        industry,
+        startup_type: startupType,
+        experience_level: experience,
+        modeId,
+      }),
     }).then((res) => res.json());
     console.log("Created room:", room);
     localStorage.setItem("roomId", room.room_id);
-    
-
-
 
     // Redirect to pitch page
     window.location.href = "/room/" + room.room_id;
@@ -114,7 +120,10 @@ export default function ModeSelection() {
               transition={{ duration: 0.5, delay: index * 0.1 }}
             >
               {/* <Link to={mode.link}> */}
-              <div onClick={() => handlePitchSelection(mode.id)} className="group h-full p-8 rounded-3xl bg-white/5 backdrop-blur-sm border border-white/10 hover:bg-white/10 hover:border-white/20 transition-all duration-300 cursor-pointer">
+              <div
+                onClick={() => handlePitchSelection(mode.id)}
+                className="group h-full p-8 rounded-3xl bg-white/5 backdrop-blur-sm border border-white/10 hover:bg-white/10 hover:border-white/20 transition-all duration-300 cursor-pointer"
+              >
                 {/* Icon */}
                 <div
                   className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${mode.gradient} flex items-center justify-center mb-6 group-hover:shadow-[0_0_30px_rgba(59,130,246,0.4)] transition-shadow`}

@@ -54,7 +54,7 @@ export default function LivePitchRoom() {
   const [chatMessage, setChatMessage] = useState("");
   const [elapsedTime, setElapsedTime] = useState(0);
   const [transcript, setTranscript] = useState(mockTranscript);
-  const { token, user } = useUser();
+  const { token, user, rooms } = useUser();
 
   const { roomId: roomId } = useParams();
   const socketRef = useRef<WebSocket | null>(null);
@@ -178,6 +178,30 @@ export default function LivePitchRoom() {
     }
   }
 
+  async function handleSessionEnd(): Promise<void> {
+    try {
+      const response = await fetch(
+        `http://localhost:8000/api/room/end/${roomId}`,
+        {
+          method: "PUT",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        },
+      );
+
+      const data = await response.json();
+
+      if (response.ok) {
+        console.log("Session ended successfully", data);
+        window.location.href = "/analytics";
+      } else {
+        console.error("Failed to end session:", data?.message || data);
+      }
+    } catch (error) {
+      console.error("Error ending session:", error);
+    }
+  }
   return (
     <div className="h-screen bg-[#0D1117] text-white flex flex-col overflow-hidden">
       {/* Top Bar */}
@@ -241,12 +265,12 @@ export default function LivePitchRoom() {
             {isPaused ? "Resume" : "Pause"}
           </button>
 
-          <Link
-            to="/analytics"
-            className="px-4 py-3 rounded-xl bg-red-500/20 border border-red-500/50 hover:bg-red-500/30 transition-all"
+          <button
+            className="px-4 py-3 rounded-xl bg-red-500/20 border border-red-500/50 hover:bg-red-500/30 transition-all flex items-center gap-2"
+            onClick={handleSessionEnd}
           >
             End Session
-          </Link>
+          </button>
         </div>
       </div>
 

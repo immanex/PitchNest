@@ -18,6 +18,7 @@ import {
   Calendar,
 } from "lucide-react";
 import { useUser } from "../context/UserContext";
+import { useEffect, useState } from "react";
 
 const recentPitches = [
   {
@@ -74,7 +75,34 @@ const aiRecommendations = [
 ];
 
 export default function Dashboard() {
-  const { user, logout } = useUser();
+  const { user, logout, rooms } = useUser();
+  const [roomList, setRooms] = useState(null);
+  const [pitches, setPitches] = useState(rooms);
+  useEffect(() => {
+    setRooms(rooms?.rooms);
+  }, [rooms]);
+
+  useEffect(() => {
+    async function fetchPitches() {
+      let response = await fetch(
+        "http://localhost:8000/api/dashboard/pitches/recent",
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+        },
+      );
+      if (response.ok) {
+        let data = await response.json();
+        console.log("Fetched recent pitches:", data);
+        setPitches(data);
+      } else {
+        console.error("Failed to fetch recent pitches");
+      }
+    }
+    fetchPitches();
+  }, [user]);
+
   return (
     <div className="min-h-screen bg-[#0D1117] text-white">
       {/* Background Effects */}
@@ -149,7 +177,9 @@ export default function Dashboard() {
       <div className="relative z-10 max-w-7xl mx-auto px-6 py-8">
         {/* Welcome Section */}
         <div className="mb-8">
-          <h1 className="text-4xl font-bold mb-2">Welcome back, {user?.full_name}! 👋</h1>
+          <h1 className="text-4xl font-bold mb-2">
+            Welcome back, {user?.full_name}! 👋
+          </h1>
           <p className="text-gray-400 text-lg">
             Ready to perfect your pitch today?
           </p>
@@ -160,7 +190,7 @@ export default function Dashboard() {
           <PerformanceCard
             icon={<Play className="w-6 h-6" />}
             label="Total Sessions"
-            value="24"
+            value={pitches?.length || 0 }
             change="+3 this week"
             trend="up"
             color="#3B82F6"
@@ -195,7 +225,7 @@ export default function Dashboard() {
           <div className="lg:col-span-2 space-y-6">
             {/* Quick Actions */}
             <div className="grid grid-cols-3 gap-4">
-              <Link to="/modes">
+              <Link to="/profile-setup">
                 <motion.button
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
@@ -207,7 +237,7 @@ export default function Dashboard() {
                 </motion.button>
               </Link>
 
-              <Link to="/modes">
+              <Link to="/profile-setup">
                 <motion.button
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
@@ -246,47 +276,122 @@ export default function Dashboard() {
               </div>
 
               <div className="space-y-4">
-                {recentPitches.map((pitch) => (
-                  <motion.div
-                    key={pitch.id}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.3 }}
-                    className="p-4 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 hover:border-[#3B82F6]/30 transition-all cursor-pointer"
-                  >
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex-1">
-                        <h3 className="font-semibold mb-1">{pitch.title}</h3>
-                        <div className="flex items-center gap-3 text-sm text-gray-400">
-                          <span className="flex items-center gap-1">
-                            <Calendar className="w-4 h-4" />
-                            {pitch.date}
-                          </span>
-                          <span>•</span>
-                          <span>{pitch.mode}</span>
+                {pitches?.length ? (
+                  pitches.map((pitch) => (
+                    <motion.div
+                      key={pitch.id}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.3 }}
+                      className="p-4 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 hover:border-[#3B82F6]/30 transition-all cursor-pointer"
+                    >
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex-1">
+                          <h3 className="font-semibold mb-1">None</h3>
+                          <div className="flex items-center gap-3 text-sm text-gray-400">
+                            <span className="flex items-center gap-1">
+                              <Calendar className="w-4 h-4" />2 hours ago
+                            </span>
+                            <span>•</span>
+                            <span>Online</span>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-2xl font-bold bg-gradient-to-r from-[#3B82F6] to-[#7C3AED] bg-clip-text text-transparent">
+                            200
+                          </div>
+                          <div className="text-xs text-gray-400">score</div>
                         </div>
                       </div>
-                      <div className="text-right">
-                        <div className="text-2xl font-bold bg-gradient-to-r from-[#3B82F6] to-[#7C3AED] bg-clip-text text-transparent">
-                          {pitch.score}
-                        </div>
-                        <div className="text-xs text-gray-400">score</div>
-                      </div>
-                    </div>
 
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2 text-sm text-gray-400">
-                        <Clock className="w-4 h-4" />
-                        <span>{pitch.duration}</span>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 text-sm text-gray-400">
+                          <Clock className="w-4 h-4" />
+                          <span>15 min</span>
+                        </div>
+                        <Link
+                          to={`/pitch/${pitch.id}`}
+                          className="flex items-center gap-1 text-sm text-[#3B82F6] hover:text-[#7C3AED] transition-colors"
+                        >
+                          <button className="px-4 py-2 rounded-lg bg-[#3B82F6]/20 text-[#3B82F6] hover:bg-[#3B82F6]/30 transition-all text-sm">
+                            View Details
+                          </button>
+                        </Link>
                       </div>
-                      <Link to="/analytics">
-                        <button className="px-4 py-2 rounded-lg bg-[#3B82F6]/20 text-[#3B82F6] hover:bg-[#3B82F6]/30 transition-all text-sm">
-                          View Details
-                        </button>
-                      </Link>
-                    </div>
-                  </motion.div>
-                ))}
+                    </motion.div>
+                  ))
+                ) : (
+                  <div className="text-center text-gray-500 py-10">
+                    No recent pitches found. Start practicing to see your
+                    sessions here!
+                  </div>
+                )}
+              </div>
+            </div>
+            {/* Recent Rooms */}
+            <div className="p-6 rounded-2xl bg-white/5 backdrop-blur-sm border border-white/10">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-2xl font-semibold">Recent Rooms</h2>
+                <Link
+                  to="/analytics"
+                  className="text-sm text-[#3B82F6] hover:text-[#7C3AED] transition-colors flex items-center gap-1"
+                >
+                  View all
+                  <ChevronRight className="w-4 h-4" />
+                </Link>
+              </div>
+
+              <div className="space-y-4">
+                {roomList?.length ? (
+                  roomList.map((room) => (
+                    <motion.div
+                      key={room.room_id}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.3 }}
+                      className="p-4 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 hover:border-[#3B82F6]/30 transition-all cursor-pointer"
+                    >
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex-1">
+                          <h3 className="font-semibold mb-1">None</h3>
+                          <div className="flex items-center gap-3 text-sm text-gray-400">
+                            <span className="flex items-center gap-1">
+                              <Calendar className="w-4 h-4" />2 hours ago
+                            </span>
+                            <span>•</span>
+                            <span>Online</span>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-2xl font-bold bg-gradient-to-r from-[#3B82F6] to-[#7C3AED] bg-clip-text text-transparent">
+                            200
+                          </div>
+                          <div className="text-xs text-gray-400">score</div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 text-sm text-gray-400">
+                          <Clock className="w-4 h-4" />
+                          <span>15 min</span>
+                        </div>
+                        <Link
+                          to={`/room/${room.room_id}`}
+                          className="flex items-center gap-1 text-sm text-[#3B82F6] hover:text-[#7C3AED] transition-colors"
+                        >
+                          <button className="px-4 py-2 rounded-lg bg-[#3B82F6]/20 text-[#3B82F6] hover:bg-[#3B82F6]/30 transition-all text-sm">
+                            View Details
+                          </button>
+                        </Link>
+                      </div>
+                    </motion.div>
+                  ))
+                ) : (
+                  <div className="text-center text-gray-500 py-10">
+                    No Ongoing room found. Start practicing to see your sessions
+                    here!
+                  </div>
+                )}
               </div>
             </div>
           </div>
