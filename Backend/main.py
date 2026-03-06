@@ -29,12 +29,3 @@ async def read_root():
 @app.get("/health")
 async def health_check():
     return {"status": "ok"}
-
-
-@app.on_event("startup")
-async def on_startup():
-    try:
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
-    except Exception as e:
-        print(f"Database initialization warning: {e}")
