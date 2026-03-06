@@ -112,15 +112,24 @@ class Pitch(Base):
     __tablename__ = "pitches"
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=generate_uuid)
+
     user_id: Mapped[str] = mapped_column(
         String, ForeignKey("users.id", ondelete="CASCADE")
     )
+
     startup_id: Mapped[str | None] = mapped_column(
         String, ForeignKey("startup_profiles.id", ondelete="SET NULL"), nullable=True
     )
 
+    # 👇 NEW FIELDS FROM FRONTEND
+    industry: Mapped[str | None] = mapped_column(String, nullable=True)
+    startup_type: Mapped[str | None] = mapped_column(String, nullable=True)
+    experience_level: Mapped[str | None] = mapped_column(String, nullable=True)
+
     mode: Mapped[str] = mapped_column(String, nullable=False, default="Practice")
     investor_archetype: Mapped[str | None] = mapped_column(String, nullable=True)
+
+    room_id: Mapped[str | None] = mapped_column(String, nullable=True)
 
     overall_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     communication_score: Mapped[float | None] = mapped_column(Float, nullable=True)
@@ -131,11 +140,13 @@ class Pitch(Base):
     feedback_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc)
     )
 
     user: Mapped["User"] = relationship(back_populates="pitches")
     startup: Mapped["StartupProfile"] = relationship(back_populates="pitches")
+
     recommendations: Mapped[list["AIRecommendation"]] = relationship(
         back_populates="pitch", cascade="all, delete-orphan"
     )
