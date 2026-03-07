@@ -1,7 +1,7 @@
 from db.models import Base
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from api import auth, onboarding, dashboard, socket
+from api import auth, onboarding, dashboard, socket, ai_routes
 from core.config import settings
 from db.database import engine
 
@@ -19,6 +19,7 @@ app.include_router(auth.router, prefix="/api")
 app.include_router(onboarding.router, prefix="/api")
 app.include_router(dashboard.router, prefix="/api")
 app.include_router(socket.router, prefix="/api")
+app.include_router(ai_routes.router, prefix="/api")
 
 
 @app.get("/")

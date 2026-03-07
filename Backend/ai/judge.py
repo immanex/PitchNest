@@ -1,19 +1,21 @@
-def evaluate_pitch(transcript: str):
-    word_count = len(transcript.split())
-    
-    
+"""
+Pitch evaluation - uses Gemini for full AI-powered feedback.
+Falls back to simple heuristic when Gemini is not configured.
+"""
+from ai.gemini import evaluate_pitch_with_gemini
 
-    score = min(word_count / 20, 10)
 
+def evaluate_pitch(transcript: str) -> dict:
+    """Evaluate pitch transcript and return scores, verdict, feedback, suggestions."""
+    result = evaluate_pitch_with_gemini(transcript)
     return {
-        "overall_score": round(score, 2),
-        "clarity": 8,
-        "market_fit": 7,
-        "innovation": 9,
-        "feedback": "Strong idea but improve clarity and business explanation.",
-        "suggestions": [
-            "Clarify target users",
-            "Explain revenue model",
-            "Add stronger closing statement"
-        ]
+        "overall_score": result["overall_score"],
+        "clarity": result["clarity"],
+        "communication": result["communication"],
+        "market_fit": result["market_fit"],
+        "verdict": result["verdict"],
+        "feedback_summary": result["feedback_summary"],
+        "strengths": result["strengths"],
+        "weaknesses": result["weaknesses"],
+        "suggestions": result["suggestions"],
     }
