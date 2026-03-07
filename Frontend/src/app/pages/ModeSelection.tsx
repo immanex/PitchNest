@@ -1,8 +1,17 @@
+import { useState } from "react";
 import { Link } from "react-router";
 import { motion } from "motion/react";
 import { Users, Dumbbell, Zap, ArrowRight, ChevronLeft } from "lucide-react";
 import { useUser } from "../context/UserContext";
 import { useLocation } from "react-router-dom";
+
+const INVESTOR_PERSONALITIES = [
+  { id: "aggressive", name: "Aggressive VC", desc: "Tough, challenges burn rate & competition" },
+  { id: "friendly", name: "Friendly Angel", desc: "Supportive, clarifying questions" },
+  { id: "analytical", name: "Analytical", desc: "Data, metrics, unit economics" },
+  { id: "technical", name: "Technical", desc: "Product, tech stack, scalability" },
+  { id: "skeptic", name: "Skeptic", desc: "Market size, moat, traction concerns" },
+];
 
 const modes = [
   {
@@ -36,11 +45,11 @@ const modes = [
 
 export default function ModeSelection() {
   const location = useLocation();
+  const [investorArchetype, setInvestorArchetype] = useState<string>("friendly");
 
   const { industry, startupType, experience } = location.state || {};
   const { user } = useUser();
   async function handlePitchSelection(modeId: string) {
-    // Store selected mode in localStorage or context
     localStorage.setItem("selectedMode", modeId);
     let room = await fetch("http://localhost:8000/api/room/create", {
       method: "POST",
@@ -54,6 +63,7 @@ export default function ModeSelection() {
         startup_type: startupType,
         experience_level: experience,
         modeId,
+        investor_archetype: investorArchetype,
       }),
     }).then((res) => res.json());
     console.log("Created room:", room);
@@ -108,6 +118,27 @@ export default function ModeSelection() {
           <p className="text-gray-400 text-lg">
             Select how you want to practice your pitch today
           </p>
+        </div>
+
+        {/* Investor Personality */}
+        <div className="mb-12 p-6 rounded-2xl bg-white/5 backdrop-blur-sm border border-white/10">
+          <h3 className="text-lg mb-4">Choose Investor Personality</h3>
+          <div className="flex flex-wrap gap-3">
+            {INVESTOR_PERSONALITIES.map((p) => (
+              <button
+                key={p.id}
+                onClick={() => setInvestorArchetype(p.id)}
+                className={`px-4 py-2 rounded-xl border transition-all ${
+                  investorArchetype === p.id
+                    ? "bg-[#3B82F6]/30 border-[#3B82F6] text-white"
+                    : "border-white/10 hover:bg-white/5 text-gray-400"
+                }`}
+              >
+                <span className="font-medium">{p.name}</span>
+                <span className="block text-xs opacity-80">{p.desc}</span>
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Mode Cards */}

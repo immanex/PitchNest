@@ -15,12 +15,6 @@ Add to `.env`:
 GEMINI_API_KEY=your_google_gemini_api_key
 ```
 
-Optional fallback if `GEMINI_API_KEY` is not set:
-
-```
-GROQ_API_KEY=your_groq_api_key
-```
-
 Get a Gemini API key: https://aistudio.google.com/apikey
 
 ## Features Implemented
@@ -49,4 +43,17 @@ Pass `investor_archetype` when creating a room to select the persona.
 
 ### 4. API
 
-- `POST /api/ai/evaluate` – Body: `{"transcript": "..."}` – Returns full evaluation
+- `POST /api/ai/evaluate` – Body: `{"transcript": "..."}` – Returns full evaluation (Gemini 1.5-pro)
+
+### 5. Real-time Voice Output
+- AI responses spoken via browser SpeechSynthesis
+- Toggle in live room (volume button)
+- Interruptions: user message cancels AI speech
+
+### 6. Dynamic Questioning
+- Conversation history passed to AI for contextual follow-ups
+- Adapts questions based on founder responses
+
+### 7. Roadmap (future)
+- Multimodal reasoning: audio, video, slides
+- Agent orchestration: multiple AI agents responding to each other

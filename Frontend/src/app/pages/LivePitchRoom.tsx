@@ -14,32 +14,18 @@ import {
   Send,
   ChevronLeft,
   ChevronRight,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
 import { useUser } from "../context/UserContext";
 import { usePeer } from "../context/peer";
 
-const investors = [
-  {
-    id: "aggressive",
-    name: "The Aggressive VC",
-    avatar: "💼",
-    status: "active",
-    color: "#EF4444",
-  },
-  {
-    id: "friendly",
-    name: "The Friendly Angel",
-    avatar: "😊",
-    status: "active",
-    color: "#10B981",
-  },
-  {
-    id: "skeptic",
-    name: "The Skeptic",
-    avatar: "🤔",
-    status: "active",
-    color: "#F59E0B",
-  },
+const INVESTOR_PERSONAS = [
+  { id: "aggressive", name: "Aggressive VC", avatar: "💼", color: "#EF4444" },
+  { id: "friendly", name: "Friendly Angel", avatar: "😊", color: "#10B981" },
+  { id: "analytical", name: "Analytical", avatar: "📊", color: "#3B82F6" },
+  { id: "technical", name: "Technical", avatar: "⚙️", color: "#8B5CF6" },
+  { id: "skeptic", name: "Skeptic", avatar: "🤔", color: "#F59E0B" },
 ];
 
 const mockTranscript = [
@@ -61,6 +47,9 @@ export default function LivePitchRoom() {
 
   const [myStream, setMyStream] = useState<MediaStream | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const [voiceEnabled, setVoiceEnabled] = useState(true);
+  const voiceEnabledRef = useRef(voiceEnabled);
+  voiceEnabledRef.current = voiceEnabled;
 
   const peerContext = usePeer();
   const createOffer = peerContext?.createOffer;
@@ -230,15 +219,19 @@ export default function LivePitchRoom() {
 
     peer.onicecandidate = (event) => {
       if (event.candidate && socketRef.current?.readyState === WebSocket.OPEN) {
-        socketRef.current.send(
-          JSON.stringify({
-            action: "ice-candidate",
-            candidate: event.candidate,
-          }),
-        );
+        const targetEmail = users.find((u) => u !== user?.email);
+        if (targetEmail) {
+          socketRef.current.send(
+            JSON.stringify({
+              action: "ice-candidate",
+              to: targetEmail,
+              candidate: event.candidate,
+            }),
+          );
+        }
       }
     };
-  }, [peer]);
+  }, [peer, users, user?.email]);
   // 1. Update the useEffect to handle incoming data
   useEffect(() => {
     if (!roomId || !token) return;
@@ -265,13 +258,28 @@ export default function LivePitchRoom() {
         }
 
         if (data.action === "user-joined") {
-          setUsers((prev) => [...prev, data.email]);
+          setUsers((prev) => (prev.includes(data.email) ? prev : [...prev, data.email]));
+        }
+        if (data.action === "user-left") {
+          setUsers((prev) => prev.filter((u) => u !== data.email));
         }
         if (data.action === "send-message") {
           setTranscript((prev) => [
             ...prev,
             { speaker: data.speaker, text: data.text },
           ]);
+          // Handle interruptions: stop AI voice when user sends message
+          if (data.speaker !== "AI Judge" && window.speechSynthesis?.speaking) {
+            window.speechSynthesis.cancel();
+          }
+          // Real-time voice output for AI responses (interruptions: user message cancels AI speech)
+          if (data.speaker === "AI Judge" && data.text && voiceEnabledRef.current && window.speechSynthesis) {
+            window.speechSynthesis.cancel();
+            const u = new SpeechSynthesisUtterance(data.text);
+            u.rate = 0.95;
+            u.pitch = 1;
+            window.speechSynthesis.speak(u);
+          }
         }
         if (data.action === "incoming-call") {
           if (createAnswer) {
@@ -356,6 +364,7 @@ export default function LivePitchRoom() {
       if (myStream) {
         myStream.getTracks().forEach((track) => track.stop());
       }
+      window.speechSynthesis?.cancel();
     };
   }, [myStream]);
 
@@ -437,6 +446,18 @@ export default function LivePitchRoom() {
             )}
           </button>
 
+          <button
+            onClick={() => {
+              setVoiceEnabled(!voiceEnabled);
+              if (!voiceEnabled === false) window.speechSynthesis?.cancel();
+            }}
+            className={`p-3 rounded-xl transition-all ${
+              voiceEnabled ? "bg-white/10 hover:bg-white/20" : "bg-amber-500/20 border border-amber-500/50"
+            }`}
+            title={voiceEnabled ? "AI voice on" : "AI voice off"}
+          >
+            {voiceEnabled ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5 text-amber-500" />}
+          </button>
           <button
             onClick={() => setIsPaused(!isPaused)}
             className="px-4 py-3 rounded-xl bg-[#3B82F6]/20 border border-[#3B82F6]/50 hover:bg-[#3B82F6]/30 transition-all flex items-center gap-2"
@@ -531,7 +552,7 @@ export default function LivePitchRoom() {
             <h3 className="text-sm text-gray-400 uppercase tracking-wider mb-4">
               Investor Panel
             </h3>
-            {investors.map((investor) => (
+            {INVESTOR_PERSONAS.map((investor) => (
               <motion.div
                 key={investor.id}
                 className="p-4 rounded-2xl bg-white/5 backdrop-blur-sm border border-white/10"

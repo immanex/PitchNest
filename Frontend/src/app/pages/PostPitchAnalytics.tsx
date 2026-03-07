@@ -143,6 +143,28 @@ export default function PostPitchAnalytics() {
           </div>
         </div>
 
+        {/* Pitch Summary Card - Verdict, Feedback, Suggestions, Pitch Again */}
+        {pitch && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+            className="p-6 rounded-2xl bg-gradient-to-br from-[#10B981]/10 to-[#3B82F6]/10 backdrop-blur-sm border border-white/10 mb-8"
+          >
+            <h2 className="text-xl font-semibold mb-4">Pitch Summary</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <div className="text-sm text-gray-400 mb-1">Verdict</div>
+                <p className="text-lg text-white">{pitch.verdict ?? "—"}</p>
+              </div>
+              <div>
+                <div className="text-sm text-gray-400 mb-1">AI Feedback</div>
+                <p className="text-gray-300">{pitch.feedback_summary ?? "—"}</p>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
         {/* Overall Score Card */}
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
