@@ -296,7 +296,8 @@ export default function LivePitchRoom() {
 
       if (response.ok) {
         console.log("Session ended successfully", data);
-        window.location.href = "/analytics";
+        const pitchId = data?.pitch_id ? `?pitch_id=${data.pitch_id}` : "";
+        window.location.href = `/analytics${pitchId}`;
       } else {
         console.error("Failed to end session:", data?.message || data);
       }
