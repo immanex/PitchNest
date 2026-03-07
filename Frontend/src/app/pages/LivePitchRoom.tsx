@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, use } from "react";
 import { useParams, Link } from "react-router";
 import { motion, AnimatePresence } from "motion/react";
 import ReactPlayer from "react-player";
@@ -80,22 +80,73 @@ export default function LivePitchRoom() {
 
   // handle on camata
   const handleOnCamara = async () => {
-    if (
-      createOffer &&
-      socketRef.current &&
-      socketRef.current.readyState === WebSocket.OPEN
-    ) {
-      const offer = await createOffer();
-      const targetEmail = users.find((u) => u !== user?.email);
+    if (isVideoOn) {
+      // TURN OFF CAMERA
+      if (myStream) {
+        myStream.getTracks().forEach((track) => track.stop());
+      }
 
-      const payload = JSON.stringify({
-        action: "call-user",
-        user: targetEmail,
-        offer: offer,
+      setMyStream(null);
+      setIsVideoOn(false);
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: isMicOn,
       });
 
-      socketRef.current.send(payload);
+      // ✅ ADD STREAM TO STATE
+      setMyStream(stream);
+
+      // ✅ SHOW LOCAL VIDEO
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+
+      // ✅ ADD TRACKS TO PEER (IMPORTANT FOR WEBRTC)
+      stream.getTracks().forEach((track) => {
+        peer?.addTrack(track, stream);
+      });
+
+      setIsVideoOn(true);
+
+      // START CALL
+      if (
+        createOffer &&
+        socketRef.current &&
+        socketRef.current.readyState === WebSocket.OPEN
+      ) {
+        console.log("Creating offer...");
+        const offer = await createOffer();
+        console.log("emails:", users);
+        const targetEmail = users.find((u) => u !== user?.email);
+        console.log("Target email:", targetEmail);
+
+        socketRef.current.send(
+          JSON.stringify({
+            action: "call-user",
+            user: targetEmail,
+            offer: offer,
+          }),
+        );
+      }
+    } catch (err) {
+      console.error("Camera error", err);
     }
+  };
+  const handleMicToggle = () => {
+    if (!myStream) {
+      setIsMicOn(!isMicOn);
+      return;
+    }
+
+    myStream.getAudioTracks().forEach((track) => {
+      track.enabled = !isMicOn;
+    });
+
+    setIsMicOn(!isMicOn);
   };
 
   const getUserMediaStream = async (): Promise<void> => {
@@ -112,10 +163,6 @@ export default function LivePitchRoom() {
   };
 
   useEffect(() => {
-    getUserMediaStream();
-  }, []);
-
-  useEffect(() => {
     if (videoRef.current && myStream) {
       videoRef.current.srcObject = myStream;
     }
@@ -130,6 +177,29 @@ export default function LivePitchRoom() {
       return () => clearInterval(timer);
     }
   }, [isPaused]);
+
+  useEffect(() => { 
+    peer?.addEventListener("negotiationneeded", async () => {
+      console.log("Negotiation needed");
+      if (
+        createOffer &&
+        socketRef.current &&
+        socketRef.current.readyState === WebSocket.OPEN
+      ) {
+        const localoffer  = await peer.createOffer();
+        const targetEmail = users.find((u) => u !== user?.email);
+
+        socketRef.current.send(
+          JSON.stringify({
+            action: "call-user",
+            user: targetEmail,
+            offer: localoffer,
+          }),
+        );
+      }
+    });
+  }, [createOffer, users, user?.email, peer]);
+
 
   // Simulate score changes
   useEffect(() => {
@@ -178,6 +248,8 @@ export default function LivePitchRoom() {
     );
 
     socket.onopen = () => {
+      
+
       console.log("Connected to room:", roomId);
     };
 
@@ -279,6 +351,13 @@ export default function LivePitchRoom() {
       setChatMessage("");
     }
   }
+  useEffect(() => {
+    return () => {
+      if (myStream) {
+        myStream.getTracks().forEach((track) => track.stop());
+      }
+    };
+  }, [myStream]);
 
   async function handleSessionEnd(): Promise<void> {
     try {
@@ -321,16 +400,14 @@ export default function LivePitchRoom() {
             <div className="text-sm text-gray-400">
               Session Time: {formatTime(elapsedTime)}
             </div>
-            <h1 className="cursor-pointer" onClick={handleOnCamara}>
-              On camara
-            </h1>
+            <h1 className="cursor-pointer">On camara</h1>
           </div>
         </div>
 
         <div className="flex items-center gap-3">
           {/* Controls */}
           <button
-            onClick={() => setIsVideoOn(!isVideoOn)}
+            onClick={handleOnCamara}
             className={`p-3 rounded-xl transition-all ${
               isVideoOn
                 ? "bg-white/10 hover:bg-white/20"
@@ -345,7 +422,7 @@ export default function LivePitchRoom() {
           </button>
 
           <button
-            onClick={() => setIsMicOn(!isMicOn)}
+            onClick={handleMicToggle}
             className={`p-3 rounded-xl transition-all ${
               isMicOn
                 ? "bg-white/10 hover:bg-white/20"
@@ -390,25 +467,17 @@ export default function LivePitchRoom() {
               <video
                 ref={videoRef}
                 autoPlay
+                playsInline
                 muted
                 className="w-full h-full object-cover"
               />
             ) : (
               <div className="w-full h-full flex items-center justify-center">
                 <div className="text-center">
-                  {myStream ? (
-                    <>
-                      <div className="w-24 h-24 rounded-full bg-gradient-to-br from-[#3B82F6] to-[#7C3AED] mx-auto mb-4 flex items-center justify-center text-4xl">
-                        👤
-                      </div>
-                      <div className="text-gray-400">Your camera feed</div>
-                    </>
-                  ) : (
-                    <>
-                      <VideoOff className="w-16 h-16 mx-auto mb-4 text-red-500" />
-                      <div className="text-gray-500">Camera is off</div>
-                    </>
-                  )}
+                  <>
+                    <VideoOff className="w-16 h-16 mx-auto mb-4 text-red-500" />
+                    <div className="text-gray-500">Camera is off</div>
+                  </>
                 </div>
               </div>
             )}

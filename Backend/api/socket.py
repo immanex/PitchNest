@@ -21,7 +21,7 @@ router = APIRouter(prefix="/room", tags=["room"])
 class ConnectionManager:
     def __init__(self):
         # Maps Room IDs to a list of active WebSockets
-        self.rooms: Dict[str, List[WebSocket]] = {}
+        self.rooms: Dict[str, Dict[str, WebSocket]] = {}
 
         # Maps User Email -> WebSocket (To find a specific person)
         self.email_to_socket: Dict[str, WebSocket] = {}
@@ -59,6 +59,10 @@ class ConnectionManager:
             if not self.rooms[room_id]:
                 del self.rooms[room_id]
         email = self.socket_to_email.pop(websocket, None)
+
+        if email and room_id in self.rooms:
+            self.rooms[room_id].pop(email, None)
+
         if email:
             self.email_to_socket.pop(email, None)
 
@@ -66,7 +70,7 @@ class ConnectionManager:
 
     async def broadcast(self, message: str, room_id: str):
         """Send a message to everyone in the specific room."""
-        for connection in self.rooms.get(room_id, []):
+        for connection in self.rooms.get(room_id, {}).values():
             try:
                 await connection.send_text(message)
             except Exception:
@@ -147,7 +151,7 @@ async def list_rooms(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     query = select(Room).where(
-        Room.owner_id == current_user.id and Room.closed == False
+        (Room.owner_id == current_user.id) & (Room.closed == False)
     )
     result = await db.execute(query)
     rooms = result.scalars().all()
@@ -183,10 +187,6 @@ async def list_chats(
     ]
 
 
-async def send_to_user(self, message: str, email: str):
-    ws = self.email_to_socket.get(email)
-    if ws:
-        await ws.send_text(message)
 
 
 @router.websocket("/ws/{room_id}")
@@ -282,7 +282,11 @@ async def websocket_room(
                 email = message_data.get("user")
                 offer = message_data.get("offer")
                 from_user = manager.socket_to_email[websocket]
-                socketId = manager.email_to_socket[email]
+                socketId = manager.email_to_socket.get(email)
+
+                if not socketId:
+                    print("User not connected:", email)
+                    continue
                 await manager.send_to_user(
                     json.dumps(
                         {"action": "incoming-call", "from": from_user, "offer": offer}
@@ -303,7 +307,16 @@ async def websocket_room(
                 )
 
             elif message_data.get("action") == "ice-candidate":
-                await manager.send_to_user(...)
+                email = message_data.get("to")
+                candidate = message_data.get("candidate")
+
+                await manager.send_to_user(
+                    json.dumps({
+                        "action": "ice-candidate",
+                        "candidate": candidate
+                    }),
+                    email
+    )
 
     except WebSocketDisconnect:
         manager.disconnect(websocket, room_id)
