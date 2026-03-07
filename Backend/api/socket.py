@@ -2,13 +2,14 @@ from fastapi import WebSocket, WebSocketDisconnect, APIRouter, Depends
 from typing import Dict, List, Annotated
 import uuid
 import json
+import asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from db.database import AsyncSessionLocal, get_db
 from db.models import Pitch, User, Room
-from api.deps import get_current_active_user
+from api.deps import get_current_active_user, get_current_user, get_user_from_token
 from schemas.socket import RoomCreate
 from db.models import User, ChatMessage
 from ai.gemini import generate_gemini_response
@@ -22,20 +23,46 @@ class ConnectionManager:
         # Maps Room IDs to a list of active WebSockets
         self.rooms: Dict[str, List[WebSocket]] = {}
 
-    async def connect(self, websocket: WebSocket, room_id: str):
-        # We accept the handshake here
+        # Maps User Email -> WebSocket (To find a specific person)
+        self.email_to_socket: Dict[str, WebSocket] = {}
+
+        # Maps WebSocket -> User Email (To clean up on disconnect)
+        self.socket_to_email: Dict[WebSocket, str] = {}
+
+    async def connect(self, websocket: WebSocket, room_id: str, email: str):
+
         await websocket.accept()
+
         if room_id not in self.rooms:
-            self.rooms[room_id] = []
-        self.rooms[room_id].append(websocket)
-        print(f"✅ User connected to room: {room_id}")
+            self.rooms[room_id] = {}
+
+        # store user
+        self.rooms[room_id][email] = websocket
+        self.email_to_socket[email] = websocket
+        self.socket_to_email[websocket] = email
+
+        print(f"✅ {email} connected to room: {room_id}")
+
+        # send current users to the new client
+        users = list(self.rooms[room_id].keys())
+
+        await websocket.send_text(json.dumps({"action": "room-users", "users": users}))
+
+        # notify others that a user joined
+        await self.broadcast(
+            json.dumps({"action": "user-joined", "email": email}), room_id
+        )
 
     def disconnect(self, websocket: WebSocket, room_id: str):
         if room_id in self.rooms and websocket in self.rooms[room_id]:
             self.rooms[room_id].remove(websocket)
             if not self.rooms[room_id]:
                 del self.rooms[room_id]
-        print(f"❌ User disconnected from room: {room_id}")
+        email = self.socket_to_email.pop(websocket, None)
+        if email:
+            self.email_to_socket.pop(email, None)
+
+        print(f"❌  disconnected from room: {room_id}")
 
     async def broadcast(self, message: str, room_id: str):
         """Send a message to everyone in the specific room."""
@@ -45,6 +72,12 @@ class ConnectionManager:
             except Exception:
                 # Handle stale connections
                 pass
+
+    async def send_to_user(self, message: str, email: str):
+        ws = self.email_to_socket.get(email)
+
+        if ws:
+            await ws.send_text(message)
 
 
 manager = ConnectionManager()
@@ -113,7 +146,9 @@ async def list_rooms(
     current_user: Annotated[User, Depends(get_current_active_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    query = select(Room).where(Room.owner_id == current_user.id and Room.closed == False)
+    query = select(Room).where(
+        Room.owner_id == current_user.id and Room.closed == False
+    )
     result = await db.execute(query)
     rooms = result.scalars().all()
     return {
@@ -148,11 +183,31 @@ async def list_chats(
     ]
 
 
+async def send_to_user(self, message: str, email: str):
+    ws = self.email_to_socket.get(email)
+    if ws:
+        await ws.send_text(message)
+
+
 @router.websocket("/ws/{room_id}")
-async def websocket_room(websocket: WebSocket, room_id: str):
+async def websocket_room(
+    websocket: WebSocket,
+    room_id: str,
+):
+
+    token = websocket.query_params.get("token")
+
+    if not token:
+        await websocket.close(code=1008)
+        return
+
+    user = await get_user_from_token(token)  # your function
+
+    if not user:
+        await websocket.close(code=1008)
+        return
 
     print(f"🚀 WebSocket connection request for room: {room_id}")
-
     async with AsyncSessionLocal() as db:
         query = select(Room.id).where(Room.id == room_id)
         result = await db.execute(query)
@@ -162,11 +217,10 @@ async def websocket_room(websocket: WebSocket, room_id: str):
         await websocket.close(code=1008)
         return
 
-    await manager.connect(websocket, room_id)
+    await manager.connect(websocket, room_id, user.email)
 
     try:
         while True:
-
             data = await websocket.receive_text()
             message_data = json.loads(data)
 
@@ -197,7 +251,9 @@ async def websocket_room(websocket: WebSocket, room_id: str):
                 )
 
                 # generate AI response
-                ai_response = generate_gemini_response(user_message.content)
+                ai_response = await asyncio.to_thread(
+                    generate_gemini_response, user_message.content
+                )
 
                 # save AI message
                 async with AsyncSessionLocal() as db:
@@ -222,6 +278,32 @@ async def websocket_room(websocket: WebSocket, room_id: str):
                     ),
                     room_id,
                 )
+            elif message_data.get("action") == "call-user":
+                email = message_data.get("user")
+                offer = message_data.get("offer")
+                from_user = manager.socket_to_email[websocket]
+                socketId = manager.email_to_socket[email]
+                await manager.send_to_user(
+                    json.dumps(
+                        {"action": "incoming-call", "from": from_user, "offer": offer}
+                    ),
+                    email,
+                )
+            elif message_data.get("action") == "call-accepted":
+                email = message_data.get("to")
+                answer = message_data.get("answer")
+
+                from_user = manager.socket_to_email[websocket]
+
+                await manager.send_to_user(
+                    json.dumps(
+                        {"action": "call-accepted", "from": from_user, "answer": answer}
+                    ),
+                    email,
+                )
+
+            elif message_data.get("action") == "ice-candidate":
+                await manager.send_to_user(...)
 
     except WebSocketDisconnect:
         manager.disconnect(websocket, room_id)

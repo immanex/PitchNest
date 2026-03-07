@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, Link } from "react-router";
 import { motion, AnimatePresence } from "motion/react";
+import ReactPlayer from "react-player";
 import {
   Video,
   VideoOff,
@@ -15,6 +16,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { useUser } from "../context/UserContext";
+import { usePeer } from "../context/peer";
 
 const investors = [
   {
@@ -55,6 +57,16 @@ export default function LivePitchRoom() {
   const [elapsedTime, setElapsedTime] = useState(0);
   const [transcript, setTranscript] = useState(mockTranscript);
   const { token, user, rooms } = useUser();
+  const [users, setUsers] = useState<string[]>([]);
+
+  const [myStream, setMyStream] = useState<MediaStream | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  const peerContext = usePeer();
+  const createOffer = peerContext?.createOffer;
+  const peer = peerContext?.peer;
+  const createAnswer = peerContext?.createAnswer;
+  const setRemoteAnswer = peerContext?.setRemoteAnswer;
 
   const { roomId: roomId } = useParams();
   const socketRef = useRef<WebSocket | null>(null);
@@ -65,6 +77,49 @@ export default function LivePitchRoom() {
     confidence: 68,
     marketFit: 85,
   });
+
+  // handle on camata
+  const handleOnCamara = async () => {
+    if (
+      createOffer &&
+      socketRef.current &&
+      socketRef.current.readyState === WebSocket.OPEN
+    ) {
+      const offer = await createOffer();
+      const targetEmail = users.find((u) => u !== user?.email);
+
+      const payload = JSON.stringify({
+        action: "call-user",
+        user: targetEmail,
+        offer: offer,
+      });
+
+      socketRef.current.send(payload);
+    }
+  };
+
+  const getUserMediaStream = async (): Promise<void> => {
+    try {
+      const stream: MediaStream = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+        video: true,
+      });
+
+      setMyStream(stream);
+    } catch (error) {
+      console.error("Error accessing media devices:", error);
+    }
+  };
+
+  useEffect(() => {
+    getUserMediaStream();
+  }, []);
+
+  useEffect(() => {
+    if (videoRef.current && myStream) {
+      videoRef.current.srcObject = myStream;
+    }
+  }, [myStream]);
 
   // Timer
   useEffect(() => {
@@ -99,6 +154,21 @@ export default function LivePitchRoom() {
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
+
+  useEffect(() => {
+    if (!peer || !socketRef.current) return;
+
+    peer.onicecandidate = (event) => {
+      if (event.candidate && socketRef.current?.readyState === WebSocket.OPEN) {
+        socketRef.current.send(
+          JSON.stringify({
+            action: "ice-candidate",
+            candidate: event.candidate,
+          }),
+        );
+      }
+    };
+  }, [peer]);
   // 1. Update the useEffect to handle incoming data
   useEffect(() => {
     if (!roomId || !token) return;
@@ -107,19 +177,51 @@ export default function LivePitchRoom() {
       `ws://localhost:8000/api/room/ws/${roomId}?token=${token}`,
     );
 
-    socket.onopen = () => console.log("Connected to room:", roomId);
+    socket.onopen = () => {
+      console.log("Connected to room:", roomId);
+    };
 
-    socket.onmessage = (event) => {
+    socket.onmessage = async (event) => {
       try {
         const data = JSON.parse(event.data);
         console.log("Received:", data);
 
         // Listen for the "send-message" action broadcasted by the server
+
+        if (data.action === "room-users") {
+          setUsers(data.users);
+        }
+
+        if (data.action === "user-joined") {
+          setUsers((prev) => [...prev, data.email]);
+        }
         if (data.action === "send-message") {
           setTranscript((prev) => [
             ...prev,
             { speaker: data.speaker, text: data.text },
           ]);
+        }
+        if (data.action === "incoming-call") {
+          if (createAnswer) {
+            const answer = await createAnswer(data.offer);
+            console.log(answer);
+
+            socketRef.current?.send(
+              JSON.stringify({
+                action: "call-accepted",
+                to: data.from,
+                answer: answer,
+              }),
+            );
+          }
+        }
+        if (data.action == "call-accepted") {
+          const { answer } = data;
+          if (setRemoteAnswer) await setRemoteAnswer(answer);
+        }
+
+        if (data.action === "ice-candidate") {
+          await peer?.addIceCandidate(data.candidate);
         }
 
         // Pro Tip: You can also update scores in real-time here
@@ -205,6 +307,7 @@ export default function LivePitchRoom() {
   return (
     <div className="h-screen bg-[#0D1117] text-white flex flex-col overflow-hidden">
       {/* Top Bar */}
+
       <div className="px-6 py-4 border-b border-white/10 flex items-center justify-between backdrop-blur-sm bg-[#0D1117]/80">
         <div className="flex items-center gap-4">
           <Link
@@ -218,6 +321,9 @@ export default function LivePitchRoom() {
             <div className="text-sm text-gray-400">
               Session Time: {formatTime(elapsedTime)}
             </div>
+            <h1 className="cursor-pointer" onClick={handleOnCamara}>
+              On camara
+            </h1>
           </div>
         </div>
 
@@ -280,20 +386,29 @@ export default function LivePitchRoom() {
         <div className="flex-1 p-6 space-y-4 overflow-y-auto">
           {/* User Video Feed */}
           <div className="aspect-video rounded-2xl bg-gradient-to-br from-[#1a1f2e] to-[#0D1117] border border-white/10 overflow-hidden relative">
-            {isVideoOn ? (
-              <div className="w-full h-full flex items-center justify-center">
-                <div className="text-center">
-                  <div className="w-24 h-24 rounded-full bg-gradient-to-br from-[#3B82F6] to-[#7C3AED] mx-auto mb-4 flex items-center justify-center text-4xl">
-                    👤
-                  </div>
-                  <div className="text-gray-400">Your camera feed</div>
-                </div>
-              </div>
+            {isVideoOn && myStream ? (
+              <video
+                ref={videoRef}
+                autoPlay
+                muted
+                className="w-full h-full object-cover"
+              />
             ) : (
               <div className="w-full h-full flex items-center justify-center">
-                <div className="text-center text-gray-500">
-                  <VideoOff className="w-16 h-16 mx-auto mb-4" />
-                  Camera is off
+                <div className="text-center">
+                  {myStream ? (
+                    <>
+                      <div className="w-24 h-24 rounded-full bg-gradient-to-br from-[#3B82F6] to-[#7C3AED] mx-auto mb-4 flex items-center justify-center text-4xl">
+                        👤
+                      </div>
+                      <div className="text-gray-400">Your camera feed</div>
+                    </>
+                  ) : (
+                    <>
+                      <VideoOff className="w-16 h-16 mx-auto mb-4 text-red-500" />
+                      <div className="text-gray-500">Camera is off</div>
+                    </>
+                  )}
                 </div>
               </div>
             )}
