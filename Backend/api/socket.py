@@ -71,7 +71,6 @@ class ConnectionManager:
     async def broadcast(self, message: str, room_id: str):
         """Send a message to everyone in the specific room."""
         for connection in self.rooms.get(room_id, {}).values():
-        for connection in self.rooms.get(room_id, {}).values():
             try:
                 await connection.send_text(message)
             except Exception:
