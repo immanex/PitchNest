@@ -15,4 +15,4 @@ COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 EXPOSE 8080
 
-CMD sed -i "s/listen 80/listen $PORT/g" /etc/nginx/conf.d/default.conf && nginx -g "daemon off;"
+CMD ["sh", "-c", "sed -i 's/listen 80/listen 8080/g' /etc/nginx/conf.d/default.conf && nginx -g 'daemon off;'"]
