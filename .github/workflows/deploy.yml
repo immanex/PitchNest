@@ -53,7 +53,7 @@ jobs:
       
       - name: Build Frontend
         run: |
-          gcloud builds submit Frontend/ --tag ${{ env.FRONTEND_IMAGE }} --config Frontend/cloudbuild.yaml
+          gcloud builds submit Frontend/ --config Frontend/cloudbuild.yaml
       
       - name: Deploy Frontend
         run: |
