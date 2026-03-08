@@ -1,6 +1,7 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, use } from "react";
 import { useParams, Link } from "react-router";
 import { motion, AnimatePresence } from "motion/react";
+import ReactPlayer from "react-player";
 import {
   Video,
   VideoOff,
@@ -13,31 +14,18 @@ import {
   Send,
   ChevronLeft,
   ChevronRight,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
 import { useUser } from "../context/UserContext";
+import { usePeer } from "../context/peer";
 
-const investors = [
-  {
-    id: "aggressive",
-    name: "The Aggressive VC",
-    avatar: "💼",
-    status: "active",
-    color: "#EF4444",
-  },
-  {
-    id: "friendly",
-    name: "The Friendly Angel",
-    avatar: "😊",
-    status: "active",
-    color: "#10B981",
-  },
-  {
-    id: "skeptic",
-    name: "The Skeptic",
-    avatar: "🤔",
-    status: "active",
-    color: "#F59E0B",
-  },
+const INVESTOR_PERSONAS = [
+  { id: "aggressive", name: "Aggressive VC", avatar: "💼", color: "#EF4444" },
+  { id: "friendly", name: "Friendly Angel", avatar: "😊", color: "#10B981" },
+  { id: "analytical", name: "Analytical", avatar: "📊", color: "#3B82F6" },
+  { id: "technical", name: "Technical", avatar: "⚙️", color: "#8B5CF6" },
+  { id: "skeptic", name: "Skeptic", avatar: "🤔", color: "#F59E0B" },
 ];
 
 const mockTranscript = [
@@ -55,6 +43,19 @@ export default function LivePitchRoom() {
   const [elapsedTime, setElapsedTime] = useState(0);
   const [transcript, setTranscript] = useState(mockTranscript);
   const { token, user, rooms } = useUser();
+  const [users, setUsers] = useState<string[]>([]);
+
+  const [myStream, setMyStream] = useState<MediaStream | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [voiceEnabled, setVoiceEnabled] = useState(true);
+  const voiceEnabledRef = useRef(voiceEnabled);
+  voiceEnabledRef.current = voiceEnabled;
+
+  const peerContext = usePeer();
+  const createOffer = peerContext?.createOffer;
+  const peer = peerContext?.peer;
+  const createAnswer = peerContext?.createAnswer;
+  const setRemoteAnswer = peerContext?.setRemoteAnswer;
 
   const { roomId: roomId } = useParams();
   const socketRef = useRef<WebSocket | null>(null);
@@ -66,6 +67,96 @@ export default function LivePitchRoom() {
     marketFit: 85,
   });
 
+  // handle on camata
+  const handleOnCamara = async () => {
+    if (isVideoOn) {
+      // TURN OFF CAMERA
+      if (myStream) {
+        myStream.getTracks().forEach((track) => track.stop());
+      }
+
+      setMyStream(null);
+      setIsVideoOn(false);
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: isMicOn,
+      });
+
+      // ✅ ADD STREAM TO STATE
+      setMyStream(stream);
+
+      // ✅ SHOW LOCAL VIDEO
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+
+      // ✅ ADD TRACKS TO PEER (IMPORTANT FOR WEBRTC)
+      stream.getTracks().forEach((track) => {
+        peer?.addTrack(track, stream);
+      });
+
+      setIsVideoOn(true);
+
+      // START CALL
+      if (
+        createOffer &&
+        socketRef.current &&
+        socketRef.current.readyState === WebSocket.OPEN
+      ) {
+        console.log("Creating offer...");
+        const offer = await createOffer();
+        console.log("emails:", users);
+        const targetEmail = users.find((u) => u !== user?.email);
+        console.log("Target email:", targetEmail);
+
+        socketRef.current.send(
+          JSON.stringify({
+            action: "call-user",
+            user: targetEmail,
+            offer: offer,
+          }),
+        );
+      }
+    } catch (err) {
+      console.error("Camera error", err);
+    }
+  };
+  const handleMicToggle = () => {
+    if (!myStream) {
+      setIsMicOn(!isMicOn);
+      return;
+    }
+
+    myStream.getAudioTracks().forEach((track) => {
+      track.enabled = !isMicOn;
+    });
+
+    setIsMicOn(!isMicOn);
+  };
+
+  const getUserMediaStream = async (): Promise<void> => {
+    try {
+      const stream: MediaStream = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+        video: true,
+      });
+
+      setMyStream(stream);
+    } catch (error) {
+      console.error("Error accessing media devices:", error);
+    }
+  };
+
+  useEffect(() => {
+    if (videoRef.current && myStream) {
+      videoRef.current.srcObject = myStream;
+    }
+  }, [myStream]);
+
   // Timer
   useEffect(() => {
     if (!isPaused) {
@@ -75,6 +166,29 @@ export default function LivePitchRoom() {
       return () => clearInterval(timer);
     }
   }, [isPaused]);
+
+  useEffect(() => { 
+    peer?.addEventListener("negotiationneeded", async () => {
+      console.log("Negotiation needed");
+      if (
+        createOffer &&
+        socketRef.current &&
+        socketRef.current.readyState === WebSocket.OPEN
+      ) {
+        const localoffer  = await peer.createOffer();
+        const targetEmail = users.find((u) => u !== user?.email);
+
+        socketRef.current.send(
+          JSON.stringify({
+            action: "call-user",
+            user: targetEmail,
+            offer: localoffer,
+          }),
+        );
+      }
+    });
+  }, [createOffer, users, user?.email, peer]);
+
 
   // Simulate score changes
   useEffect(() => {
@@ -99,6 +213,25 @@ export default function LivePitchRoom() {
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
+
+  useEffect(() => {
+    if (!peer || !socketRef.current) return;
+
+    peer.onicecandidate = (event) => {
+      if (event.candidate && socketRef.current?.readyState === WebSocket.OPEN) {
+        const targetEmail = users.find((u) => u !== user?.email);
+        if (targetEmail) {
+          socketRef.current.send(
+            JSON.stringify({
+              action: "ice-candidate",
+              to: targetEmail,
+              candidate: event.candidate,
+            }),
+          );
+        }
+      }
+    };
+  }, [peer, users, user?.email]);
   // 1. Update the useEffect to handle incoming data
   useEffect(() => {
     if (!roomId || !token) return;
@@ -107,19 +240,68 @@ export default function LivePitchRoom() {
       `ws://localhost:8000/api/room/ws/${roomId}?token=${token}`,
     );
 
-    socket.onopen = () => console.log("Connected to room:", roomId);
+    socket.onopen = () => {
+      
 
-    socket.onmessage = (event) => {
+      console.log("Connected to room:", roomId);
+    };
+
+    socket.onmessage = async (event) => {
       try {
         const data = JSON.parse(event.data);
         console.log("Received:", data);
 
         // Listen for the "send-message" action broadcasted by the server
+
+        if (data.action === "room-users") {
+          setUsers(data.users);
+        }
+
+        if (data.action === "user-joined") {
+          setUsers((prev) => (prev.includes(data.email) ? prev : [...prev, data.email]));
+        }
+        if (data.action === "user-left") {
+          setUsers((prev) => prev.filter((u) => u !== data.email));
+        }
         if (data.action === "send-message") {
           setTranscript((prev) => [
             ...prev,
             { speaker: data.speaker, text: data.text },
           ]);
+          // Handle interruptions: stop AI voice when user sends message
+          if (data.speaker !== "AI Judge" && window.speechSynthesis?.speaking) {
+            window.speechSynthesis.cancel();
+          }
+          // Real-time voice output for AI responses (interruptions: user message cancels AI speech)
+          if (data.speaker === "AI Judge" && data.text && voiceEnabledRef.current && window.speechSynthesis) {
+            window.speechSynthesis.cancel();
+            const u = new SpeechSynthesisUtterance(data.text);
+            u.rate = 0.95;
+            u.pitch = 1;
+            window.speechSynthesis.speak(u);
+          }
+        }
+        if (data.action === "incoming-call") {
+          if (createAnswer) {
+            const answer = await createAnswer(data.offer);
+            console.log(answer);
+
+            socketRef.current?.send(
+              JSON.stringify({
+                action: "call-accepted",
+                to: data.from,
+                answer: answer,
+              }),
+            );
+          }
+        }
+        if (data.action == "call-accepted") {
+          const { answer } = data;
+          if (setRemoteAnswer) await setRemoteAnswer(answer);
+        }
+
+        if (data.action === "ice-candidate") {
+          await peer?.addIceCandidate(data.candidate);
         }
 
         // Pro Tip: You can also update scores in real-time here
@@ -177,6 +359,14 @@ export default function LivePitchRoom() {
       setChatMessage("");
     }
   }
+  useEffect(() => {
+    return () => {
+      if (myStream) {
+        myStream.getTracks().forEach((track) => track.stop());
+      }
+      window.speechSynthesis?.cancel();
+    };
+  }, [myStream]);
 
   async function handleSessionEnd(): Promise<void> {
     try {
@@ -194,7 +384,8 @@ export default function LivePitchRoom() {
 
       if (response.ok) {
         console.log("Session ended successfully", data);
-        window.location.href = "/analytics";
+        const pitchId = data?.pitch_id ? `?pitch_id=${data.pitch_id}` : "";
+        window.location.href = `/analytics${pitchId}`;
       } else {
         console.error("Failed to end session:", data?.message || data);
       }
@@ -205,6 +396,7 @@ export default function LivePitchRoom() {
   return (
     <div className="h-screen bg-[#0D1117] text-white flex flex-col overflow-hidden">
       {/* Top Bar */}
+
       <div className="px-6 py-4 border-b border-white/10 flex items-center justify-between backdrop-blur-sm bg-[#0D1117]/80">
         <div className="flex items-center gap-4">
           <Link
@@ -218,13 +410,14 @@ export default function LivePitchRoom() {
             <div className="text-sm text-gray-400">
               Session Time: {formatTime(elapsedTime)}
             </div>
+            <h1 className="cursor-pointer">On camara</h1>
           </div>
         </div>
 
         <div className="flex items-center gap-3">
           {/* Controls */}
           <button
-            onClick={() => setIsVideoOn(!isVideoOn)}
+            onClick={handleOnCamara}
             className={`p-3 rounded-xl transition-all ${
               isVideoOn
                 ? "bg-white/10 hover:bg-white/20"
@@ -239,7 +432,7 @@ export default function LivePitchRoom() {
           </button>
 
           <button
-            onClick={() => setIsMicOn(!isMicOn)}
+            onClick={handleMicToggle}
             className={`p-3 rounded-xl transition-all ${
               isMicOn
                 ? "bg-white/10 hover:bg-white/20"
@@ -253,6 +446,18 @@ export default function LivePitchRoom() {
             )}
           </button>
 
+          <button
+            onClick={() => {
+              setVoiceEnabled(!voiceEnabled);
+              if (!voiceEnabled === false) window.speechSynthesis?.cancel();
+            }}
+            className={`p-3 rounded-xl transition-all ${
+              voiceEnabled ? "bg-white/10 hover:bg-white/20" : "bg-amber-500/20 border border-amber-500/50"
+            }`}
+            title={voiceEnabled ? "AI voice on" : "AI voice off"}
+          >
+            {voiceEnabled ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5 text-amber-500" />}
+          </button>
           <button
             onClick={() => setIsPaused(!isPaused)}
             className="px-4 py-3 rounded-xl bg-[#3B82F6]/20 border border-[#3B82F6]/50 hover:bg-[#3B82F6]/30 transition-all flex items-center gap-2"
@@ -280,20 +485,21 @@ export default function LivePitchRoom() {
         <div className="flex-1 p-6 space-y-4 overflow-y-auto">
           {/* User Video Feed */}
           <div className="aspect-video rounded-2xl bg-gradient-to-br from-[#1a1f2e] to-[#0D1117] border border-white/10 overflow-hidden relative">
-            {isVideoOn ? (
-              <div className="w-full h-full flex items-center justify-center">
-                <div className="text-center">
-                  <div className="w-24 h-24 rounded-full bg-gradient-to-br from-[#3B82F6] to-[#7C3AED] mx-auto mb-4 flex items-center justify-center text-4xl">
-                    👤
-                  </div>
-                  <div className="text-gray-400">Your camera feed</div>
-                </div>
-              </div>
+            {isVideoOn && myStream ? (
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted
+                className="w-full h-full object-cover"
+              />
             ) : (
               <div className="w-full h-full flex items-center justify-center">
-                <div className="text-center text-gray-500">
-                  <VideoOff className="w-16 h-16 mx-auto mb-4" />
-                  Camera is off
+                <div className="text-center">
+                  <>
+                    <VideoOff className="w-16 h-16 mx-auto mb-4 text-red-500" />
+                    <div className="text-gray-500">Camera is off</div>
+                  </>
                 </div>
               </div>
             )}
@@ -346,7 +552,7 @@ export default function LivePitchRoom() {
             <h3 className="text-sm text-gray-400 uppercase tracking-wider mb-4">
               Investor Panel
             </h3>
-            {investors.map((investor) => (
+            {INVESTOR_PERSONAS.map((investor) => (
               <motion.div
                 key={investor.id}
                 className="p-4 rounded-2xl bg-white/5 backdrop-blur-sm border border-white/10"

@@ -5,7 +5,7 @@ from sqlalchemy import select, desc
 from typing import Annotated
 
 from core.config import settings
-from db.database import get_db
+from db.database import get_db,AsyncSessionLocal
 from db.models import Pitch, User
 import jwt
 
@@ -51,3 +51,24 @@ async def get_current_active_user(
     if not current_user.is_active:
         raise HTTPException(status_code=400, detail="Inactive user")
     return current_user
+
+async def get_user_from_token(token: str) -> User:
+    try:
+        payload = jwt.decode(
+            token,
+            settings.SECRET_KEY,
+            algorithms=[settings.ALGORITHM],
+        )
+    except Exception:
+        return None
+
+    user_id = payload.get("sub")
+    if not user_id:
+        return None
+
+    async with AsyncSessionLocal() as db:
+        query = select(User).where(User.id == user_id)
+        result = await db.execute(query)
+        user = result.scalar_one_or_none()
+
+    return user

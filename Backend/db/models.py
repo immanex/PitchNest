@@ -177,6 +177,7 @@ class Room(Base):
     owner_id: Mapped[str] = mapped_column(
         String, ForeignKey("users.id", ondelete="CASCADE")
     )
+    closed = Column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )

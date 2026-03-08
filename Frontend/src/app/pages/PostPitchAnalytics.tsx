@@ -1,4 +1,5 @@
-import { Link } from 'react-router';
+import { useState, useEffect } from 'react';
+import { Link, useSearchParams } from 'react-router';
 import { motion } from 'motion/react';
 import { 
   Download, 
@@ -9,12 +10,27 @@ import {
   Clock,
   AlertCircle,
   Award,
-  ChevronLeft
+  ChevronLeft,
+  CheckCircle2,
+  XCircle,
+  Lightbulb,
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { useUser } from '../context/UserContext';
 
-// Mock data for confidence trend
-const confidenceData = [
+type Pitch = {
+  id: string;
+  overall_score: number | null;
+  clarity_score: number | null;
+  communication_score: number | null;
+  market_fit_score: number | null;
+  verdict: string | null;
+  feedback_summary: string | null;
+  recommendations: { id: string; category: string; content: string }[];
+};
+
+// Fallback mock data for confidence trend (when no detailed analytics yet)
+const defaultConfidenceData = [
   { time: '0:00', confidence: 45 },
   { time: '1:00', confidence: 52 },
   { time: '2:00', confidence: 68 },
@@ -25,14 +41,7 @@ const confidenceData = [
   { time: '7:00', confidence: 85 },
 ];
 
-const investorReactions = [
-  { time: '1:24', investor: 'The Skeptic', reaction: 'Raised eyebrow at market size claim', type: 'concern' },
-  { time: '3:45', investor: 'The Friendly Angel', reaction: 'Nodded positively at team slide', type: 'positive' },
-  { time: '5:12', investor: 'The Aggressive VC', reaction: 'Asked about unit economics', type: 'question' },
-  { time: '6:30', investor: 'The Friendly Angel', reaction: 'Smiled during demo', type: 'positive' },
-];
-
-const fillerWords = [
+const defaultFillerWords = [
   { word: 'um', count: 12 },
   { word: 'uh', count: 8 },
   { word: 'like', count: 15 },
@@ -40,7 +49,64 @@ const fillerWords = [
 ];
 
 export default function PostPitchAnalytics() {
-  const overallScore = 78;
+  const [searchParams] = useSearchParams();
+  const pitchId = searchParams.get('pitch_id');
+  const { token } = useUser();
+  const [pitch, setPitch] = useState<Pitch | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchPitch = async () => {
+      if (!token) {
+        setLoading(false);
+        return;
+      }
+      try {
+        const url = pitchId
+          ? `http://localhost:8000/api/dashboard/pitches/${pitchId}`
+          : 'http://localhost:8000/api/dashboard/pitches/recent?limit=1';
+        const res = await fetch(url, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) throw new Error('Failed to load pitch');
+        const data = await res.json();
+        const p = Array.isArray(data) ? data[0] : data;
+        setPitch(p || null);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Failed to load');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchPitch();
+  }, [token, pitchId]);
+
+  const strengths = pitch?.recommendations?.filter(r => r.category === 'strength').map(r => r.content) ?? [];
+  const weaknesses = pitch?.recommendations?.filter(r => r.category === 'weakness').map(r => r.content) ?? [];
+  const suggestions = pitch?.recommendations?.filter(r => r.category === 'suggestion').map(r => r.content) ?? [];
+
+  const overallScore = pitch?.overall_score ?? 78;
+  const clarity = pitch?.clarity_score ?? 82;
+  const confidence = pitch?.communication_score ?? 85;
+  const marketFit = pitch?.market_fit_score ?? 68;
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#0D1117] text-white flex items-center justify-center">
+        <div className="text-gray-400">Loading analytics...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-[#0D1117] text-white flex flex-col items-center justify-center gap-4">
+        <p className="text-red-400">{error}</p>
+        <Link to="/dashboard" className="text-[#3B82F6] hover:underline">Back to Dashboard</Link>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#0D1117] text-white">
@@ -59,7 +125,7 @@ export default function PostPitchAnalytics() {
               className="inline-flex items-center gap-2 text-gray-400 hover:text-white transition-colors mb-4"
             >
               <ChevronLeft className="w-5 h-5" />
-              Back to Pitch Room
+              Back to Dashboard
             </Link>
             <h1 className="text-4xl mb-2">Session Complete! 🎉</h1>
             <p className="text-gray-400 text-lg">Here's how you performed</p>
@@ -77,6 +143,28 @@ export default function PostPitchAnalytics() {
           </div>
         </div>
 
+        {/* Pitch Summary Card - Verdict, Feedback, Suggestions, Pitch Again */}
+        {pitch && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+            className="p-6 rounded-2xl bg-gradient-to-br from-[#10B981]/10 to-[#3B82F6]/10 backdrop-blur-sm border border-white/10 mb-8"
+          >
+            <h2 className="text-xl font-semibold mb-4">Pitch Summary</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <div className="text-sm text-gray-400 mb-1">Verdict</div>
+                <p className="text-lg text-white">{pitch.verdict ?? "—"}</p>
+              </div>
+              <div>
+                <div className="text-sm text-gray-400 mb-1">AI Feedback</div>
+                <p className="text-gray-300">{pitch.feedback_summary ?? "—"}</p>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
         {/* Overall Score Card */}
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
@@ -91,23 +179,99 @@ export default function PostPitchAnalytics() {
               <div className="text-sm text-gray-400 uppercase tracking-wider mb-2">Overall Score</div>
               <div className="flex items-baseline gap-4">
                 <span className="text-6xl bg-gradient-to-r from-[#3B82F6] to-[#7C3AED] bg-clip-text text-transparent">
-                  {overallScore}
+                  {Math.round(overallScore)}
                 </span>
                 <span className="text-2xl text-gray-400">/ 100</span>
               </div>
-              <div className="flex items-center gap-2 mt-4">
-                <TrendingUp className="w-5 h-5 text-green-500" />
-                <span className="text-green-500">+12 points from last session</span>
-              </div>
+              {pitch && (
+                <div className="flex items-center gap-2 mt-4">
+                  <TrendingUp className="w-5 h-5 text-green-500" />
+                  <span className="text-green-500">AI-evaluated with Gemini</span>
+                </div>
+              )}
             </div>
 
             <div className="flex items-center gap-8">
-              <ScoreBadge label="Clarity" score={82} color="#3B82F6" />
-              <ScoreBadge label="Confidence" score={85} color="#7C3AED" />
-              <ScoreBadge label="Market Fit" score={68} color="#10B981" />
+              <ScoreBadge label="Clarity" score={Math.round(clarity)} color="#3B82F6" />
+              <ScoreBadge label="Communication" score={Math.round(confidence)} color="#7C3AED" />
+              <ScoreBadge label="Market Fit" score={Math.round(marketFit)} color="#10B981" />
             </div>
           </div>
         </motion.div>
+
+        {/* Pitch Summary: Panel Verdict, Strengths, Weaknesses, AI Feedback, Improvement Suggestions */}
+        {pitch && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.1 }}
+            className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8"
+          >
+            {/* Panel Verdict & AI Feedback */}
+            <div className="p-6 rounded-2xl bg-white/5 backdrop-blur-sm border border-white/10 space-y-6">
+              <h3 className="text-lg">Panel Verdict</h3>
+              <p className="text-lg text-gray-200">{pitch.verdict ?? '—'}</p>
+              {pitch.feedback_summary && (
+                <>
+                  <h3 className="text-lg pt-4 border-t border-white/10">AI Written Feedback</h3>
+                  <p className="text-gray-300">{pitch.feedback_summary}</p>
+                </>
+              )}
+            </div>
+
+            {/* Strengths & Weaknesses */}
+            <div className="p-6 rounded-2xl bg-white/5 backdrop-blur-sm border border-white/10 space-y-6">
+              {strengths.length > 0 && (
+                <div>
+                  <h3 className="text-lg flex items-center gap-2 mb-3">
+                    <CheckCircle2 className="w-5 h-5 text-green-500" />
+                    Strengths
+                  </h3>
+                  <ul className="space-y-2">
+                    {strengths.map((s, i) => (
+                      <li key={i} className="text-gray-300 flex items-start gap-2">
+                        <span className="text-green-500">•</span>
+                        {s}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {weaknesses.length > 0 && (
+                <div>
+                  <h3 className="text-lg flex items-center gap-2 mb-3">
+                    <XCircle className="w-5 h-5 text-amber-500" />
+                    Weaknesses
+                  </h3>
+                  <ul className="space-y-2">
+                    {weaknesses.map((w, i) => (
+                      <li key={i} className="text-gray-300 flex items-start gap-2">
+                        <span className="text-amber-500">•</span>
+                        {w}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {suggestions.length > 0 && (
+                <div>
+                  <h3 className="text-lg flex items-center gap-2 mb-3">
+                    <Lightbulb className="w-5 h-5 text-[#3B82F6]" />
+                    Improvement Suggestions
+                  </h3>
+                  <ul className="space-y-2">
+                    {suggestions.map((s, i) => (
+                      <li key={i} className="text-gray-300 flex items-start gap-2">
+                        <span className="text-[#3B82F6]">•</span>
+                        {s}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
 
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
@@ -144,7 +308,7 @@ export default function PostPitchAnalytics() {
           <div className="p-6 rounded-2xl bg-white/5 backdrop-blur-sm border border-white/10">
             <h3 className="text-lg mb-6">Confidence Trend</h3>
             <ResponsiveContainer width="100%" height={250}>
-              <LineChart data={confidenceData}>
+              <LineChart data={defaultConfidenceData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
                 <XAxis 
                   dataKey="time" 
@@ -180,7 +344,7 @@ export default function PostPitchAnalytics() {
           <div className="p-6 rounded-2xl bg-white/5 backdrop-blur-sm border border-white/10">
             <h3 className="text-lg mb-6">Filler Word Analysis</h3>
             <div className="space-y-4">
-              {fillerWords.map((item, idx) => (
+              {defaultFillerWords.map((item, idx) => (
                 <div key={idx} className="space-y-2">
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-gray-400">"{item.word}"</span>
@@ -205,11 +369,15 @@ export default function PostPitchAnalytics() {
           </div>
         </div>
 
-        {/* Investor Reaction Timeline */}
+        {/* Investor Reaction Timeline (placeholder until real-time analysis) */}
         <div className="p-6 rounded-2xl bg-white/5 backdrop-blur-sm border border-white/10">
           <h3 className="text-lg mb-6">Investor Reaction Timeline</h3>
           <div className="space-y-4">
-            {investorReactions.map((reaction, idx) => (
+            {[
+              { time: '1:24', investor: 'The Skeptic', reaction: 'Raised eyebrow at market size claim', type: 'concern' as const },
+              { time: '3:45', investor: 'The Friendly Angel', reaction: 'Nodded positively at team slide', type: 'positive' as const },
+              { time: '5:12', investor: 'The Aggressive VC', reaction: 'Asked about unit economics', type: 'question' as const },
+            ].map((reaction, idx) => (
               <motion.div
                 key={idx}
                 initial={{ opacity: 0, x: -20 }}
@@ -240,7 +408,7 @@ export default function PostPitchAnalytics() {
           </div>
         </div>
 
-        {/* Action Buttons */}
+        {/* Action Buttons: Pitch Again, Back to Dashboard */}
         <div className="mt-12 flex items-center justify-center gap-4">
           <Link
             to="/dashboard"
@@ -249,10 +417,10 @@ export default function PostPitchAnalytics() {
             Back to Dashboard
           </Link>
           <Link
-            to="/pitch"
+            to="/modes"
             className="px-8 py-4 rounded-xl bg-gradient-to-r from-[#3B82F6] to-[#7C3AED] hover:shadow-[0_0_30px_rgba(59,130,246,0.5)] transition-all"
           >
-            Start New Session
+            Pitch Again
           </Link>
         </div>
       </div>

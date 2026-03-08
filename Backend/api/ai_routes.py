@@ -1,8 +1,17 @@
+import asyncio
 from fastapi import APIRouter
-from ai.judge import evaluate_pitch
+from pydantic import BaseModel
+
+from ai.gemini import evaluate_pitch_with_gemini
 
 router = APIRouter(prefix="/ai", tags=["AI"])
 
+
+class EvaluateRequest(BaseModel):
+    transcript: str
+
+
 @router.post("/evaluate")
-def evaluate(transcript: str):
-    return evaluate_pitch(transcript)
+async def evaluate(body: EvaluateRequest):
+    result = await asyncio.to_thread(evaluate_pitch_with_gemini, body.transcript)
+    return result
