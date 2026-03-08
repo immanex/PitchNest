@@ -19,8 +19,11 @@ try:
     app.include_router(dashboard.router, prefix="/api")
     app.include_router(socket.router, prefix="/api")
     app.include_router(ai_routes.router, prefix="/api")
+    print("✅ All routes loaded successfully")
 except Exception as e:
-    print(f"Warning: Could not load all routes: {e}")
+    print(f"❌ ERROR loading routes: {e}")
+    import traceback
+    traceback.print_exc()
 
 
 @app.get("/")
@@ -31,6 +34,17 @@ async def read_root():
 @app.get("/health")
 async def health_check():
     return {"status": "ok"}
+
+
+@app.get("/test-db")
+async def test_db():
+    try:
+        from db.database import engine
+        async with engine.connect() as conn:
+            result = await conn.execute("SELECT 1")
+            return {"db_status": "connected", "result": result.scalar()}
+    except Exception as e:
+        return {"db_status": "failed", "error": str(e)}
 
 
 if __name__ == "__main__":

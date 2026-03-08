@@ -20,8 +20,9 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://pitchnest:pitchnest123@postgres:5432/pitchnest
       SECRET_KEY: eddc9ebbba83fa05d6cb67f6a334667c9de1827c2783caa64b24fb478395fb5e
+      GEMINI_API_KEY: AIzaSyAzNGYa0aY4_QCl_W3YAOUM4C_usVUdRMM
     ports:
-      - "8000:8000"
+      - "8080:8080"
     depends_on:
       postgres:
         condition: service_healthy
@@ -29,7 +30,7 @@ services:
   frontend:
     build: ./Frontend
     ports:
-      - "80:80"
+      - "80:8080"
     depends_on:
       - backend
 
