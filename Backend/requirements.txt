@@ -11,3 +11,4 @@ sqlalchemy[asyncio]
 psycopg2-binary
 fastapi-mail
 python-jose
+groq
