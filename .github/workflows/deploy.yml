@@ -1,0 +1,63 @@
+name: Deploy to Cloud Run
+
+on:
+  push:
+    branches: [main, cloud-setup-v2]
+
+env:
+  PROJECT_ID: pitchnest-live
+  REGION: us-central1
+  BACKEND_IMAGE: us-central1-docker.pkg.dev/pitchnest-live/cloud-run-source-deploy/pitchnest-backend
+  FRONTEND_IMAGE: us-central1-docker.pkg.dev/pitchnest-live/cloud-run-source-deploy/pitchnest-frontend
+
+jobs:
+  deploy-backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - id: auth
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+      
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+      
+      - name: Build Backend
+        run: |
+          gcloud builds submit Backend/ --tag ${{ env.BACKEND_IMAGE }}
+      
+      - name: Deploy Backend
+        run: |
+          gcloud run deploy pitchnest-backend \
+            --image ${{ env.BACKEND_IMAGE }}:latest \
+            --region ${{ env.REGION }} \
+            --allow-unauthenticated \
+            --add-cloudsql-instances pitchnest-live:us-central1:pitchnest-db \
+            --set-env-vars SECRET_KEY=${{ secrets.SECRET_KEY }},GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }},DATABASE_URL=${{ secrets.DATABASE_URL }}
+
+  deploy-frontend:
+    runs-on: ubuntu-latest
+    needs: deploy-backend
+    steps:
+      - uses: actions/checkout@v3
+      
+      - id: auth
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+      
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+      
+      - name: Build Frontend
+        run: |
+          gcloud builds submit Frontend/ --tag ${{ env.FRONTEND_IMAGE }} -f Frontend/Dockerfile.cloud
+      
+      - name: Deploy Frontend
+        run: |
+          gcloud run deploy pitchnest-frontend \
+            --image ${{ env.FRONTEND_IMAGE }}:latest \
+            --region ${{ env.REGION }} \
+            --allow-unauthenticated
