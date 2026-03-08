@@ -74,9 +74,19 @@ const aiRecommendations = [
   },
 ];
 
+interface Pitch {
+  id: number;
+  title: string;
+  date: string;
+  mode: string;
+  score: number;
+  duration: string;
+  status: string;
+}
+
 export default function Dashboard() {
   const { user, logout, rooms } = useUser();
-  const [roomList, setRooms] = useState(null);
+  const [roomList, setRooms] = useState<any[]>([]);
   const [pitches, setPitches] = useState(rooms);
   useEffect(() => {
     setRooms(rooms?.rooms);
@@ -277,7 +287,7 @@ export default function Dashboard() {
 
               <div className="space-y-4">
                 {pitches?.length ? (
-                  pitches.map((pitch) => (
+                  pitches.map((pitch: Pitch) => (
                     <motion.div
                       key={pitch.id}
                       initial={{ opacity: 0, y: 10 }}
@@ -287,18 +297,18 @@ export default function Dashboard() {
                     >
                       <div className="flex items-start justify-between mb-3">
                         <div className="flex-1">
-                          <h3 className="font-semibold mb-1">None</h3>
+                          <h3 className="font-semibold mb-1">{pitch.title}</h3>
                           <div className="flex items-center gap-3 text-sm text-gray-400">
                             <span className="flex items-center gap-1">
-                              <Calendar className="w-4 h-4" />2 hours ago
+                              <Calendar className="w-4 h-4" />{pitch.date}
                             </span>
                             <span>•</span>
-                            <span>Online</span>
+                            <span>{pitch.mode}</span>
                           </div>
                         </div>
                         <div className="text-right">
                           <div className="text-2xl font-bold bg-gradient-to-r from-[#3B82F6] to-[#7C3AED] bg-clip-text text-transparent">
-                            200
+                            {pitch.score}
                           </div>
                           <div className="text-xs text-gray-400">score</div>
                         </div>
@@ -307,10 +317,10 @@ export default function Dashboard() {
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2 text-sm text-gray-400">
                           <Clock className="w-4 h-4" />
-                          <span>15 min</span>
+                          <span>{pitch.duration}</span>
                         </div>
                         <Link
-                          to={`/pitch/${pitch.id}`}
+                          to={`/analytics?pitch_id=${pitch.id}`}
                           className="flex items-center gap-1 text-sm text-[#3B82F6] hover:text-[#7C3AED] transition-colors"
                         >
                           <button className="px-4 py-2 rounded-lg bg-[#3B82F6]/20 text-[#3B82F6] hover:bg-[#3B82F6]/30 transition-all text-sm">
@@ -322,8 +332,7 @@ export default function Dashboard() {
                   ))
                 ) : (
                   <div className="text-center text-gray-500 py-10">
-                    No recent pitches found. Start practicing to see your
-                    sessions here!
+                    No recent pitches found. Start practicing to see your sessions here!
                   </div>
                 )}
               </div>
