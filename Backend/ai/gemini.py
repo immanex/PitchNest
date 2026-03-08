@@ -9,10 +9,7 @@ from typing import Any
 
 from core.config import settings
 
-# Optional: fallback to Groq if Gemini not configured (backward compat)
 _gemini_chat = _gemini_pro = None
-_use_groq = False
-
 try:
     import google.generativeai as genai
     if settings.GEMINI_API_KEY:
@@ -21,9 +18,6 @@ try:
         _gemini_pro = genai.GenerativeModel("gemini-1.5-pro")
 except Exception:
     pass
-
-if not _gemini_chat and settings.GROQ_API_KEY:
-    _use_groq = True
 
 
 INVESTOR_PERSONAS = {
@@ -56,42 +50,35 @@ def _get_persona_prompt(investor_archetype: str | None) -> str:
     return INVESTOR_PERSONAS.get(key, INVESTOR_PERSONAS["friendly"])
 
 
-def generate_gemini_response(text: str, investor_archetype: str | None = None) -> str:
+def generate_gemini_response(
+    text: str,
+    investor_archetype: str | None = None,
+    conversation_history: list[dict[str, str]] | None = None,
+) -> str:
     """
     Generate VC-style AI response for live pitch chat.
     Uses gemini-1.5-flash for fast real-time responses.
-    Falls back to Groq (llama) if Gemini not configured.
+    Dynamic questioning: uses conversation_history for contextual follow-ups.
     """
     persona = _get_persona_prompt(investor_archetype)
     system = (
         "You are an experienced venture capitalist judging startup pitches. "
         f"{persona} "
-        "Respond concisely (2-4 sentences). Ask one focused question or give one pointed feedback."
+        "Respond concisely (2-4 sentences). Ask one focused question or give one pointed feedback. "
+        "Adapt your questions based on what the founder has already shared (dynamic questioning)."
     )
 
     if _gemini_chat:
-        chat = _gemini_chat.start_chat(history=[])
+        history = []
+        if conversation_history:
+            for msg in conversation_history[-10:]:  # Last 10 exchanges for context
+                role = "user" if msg.get("speaker") != "AI Judge" else "model"
+                history.append({"role": role, "parts": [msg.get("content", "")]})
+        chat = _gemini_chat.start_chat(history=history)
         resp = chat.send_message(f"{system}\n\nUser message: {text}")
         return (resp.text or "").strip()
 
-    if _use_groq and settings.GROQ_API_KEY:
-        from groq import Groq
-        client = Groq(api_key=settings.GROQ_API_KEY)
-        stream = client.chat.completions.create(
-            model="llama-3.1-8b-instant",
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": text},
-            ],
-            temperature=0.7,
-            max_tokens=512,
-            stream=True,
-        )
-        return "".join(
-            chunk.choices[0].delta.content or "" for chunk in stream
-        ).strip()
-
-    return "AI is not configured. Add GEMINI_API_KEY or GROQ_API_KEY to .env"
+    return "AI is not configured. Add GEMINI_API_KEY to .env"
 
 
 def evaluate_pitch_with_gemini(transcript: str) -> dict[str, Any]:

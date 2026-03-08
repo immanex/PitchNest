@@ -55,26 +55,30 @@ class ConnectionManager:
 
     def disconnect(self, websocket: WebSocket, room_id: str):
         email = self.socket_to_email.pop(websocket, None)
-
-        if email and room_id in self.rooms:
-            self.rooms[room_id].pop(email, None)
-
         if email:
             self.email_to_socket.pop(email, None)
-            if room_id in self.rooms and email in self.rooms[room_id]:
-                del self.rooms[room_id][email]
-                if not self.rooms[room_id]:
-                    del self.rooms[room_id]
+        if room_id in self.rooms:
+            if email:
+                self.rooms[room_id].pop(email, None)
+            else:
+                for e, ws in list(self.rooms[room_id].items()):
+                    if ws is websocket:
+                        self.rooms[room_id].pop(e, None)
+                        break
+            if not self.rooms[room_id]:
+                del self.rooms[room_id]
+        print(f"❌ {email or 'unknown'} disconnected from room: {room_id}")
 
-        print(f"❌  disconnected from room: {room_id}")
-
-    async def broadcast(self, message: str, room_id: str):
-        """Send a message to everyone in the specific room."""
-        for connection in self.rooms.get(room_id, {}).values():
+    async def broadcast(self, message: str, room_id: str, exclude_ws: WebSocket | None = None):
+        """Send a message to everyone in the room. Iterate over a copy to avoid modification during send."""
+        room = self.rooms.get(room_id, {})
+        connections = list(room.values())
+        for ws in connections:
+            if exclude_ws and ws is exclude_ws:
+                continue
             try:
-                await connection.send_text(message)
+                await ws.send_text(message)
             except Exception:
-                # Handle stale connections
                 pass
 
     async def send_to_user(self, message: str, email: str):
@@ -296,20 +300,37 @@ async def websocket_room(
                     room_id,
                 )
 
-                # Fetch investor archetype for personality
+                # Fetch investor archetype and conversation history for dynamic questioning
                 investor_archetype = None
+                conversation_history = []
                 async with AsyncSessionLocal() as db:
                     pitch_q = select(Pitch).where(Pitch.room_id == room_id)
                     pr = await db.execute(pitch_q)
                     p = pr.scalar_one_or_none()
                     if p:
                         investor_archetype = p.investor_archetype
+                    chat_q = (
+                        select(ChatMessage)
+                        .where(ChatMessage.room_id == room_id)
+                        .options(selectinload(ChatMessage.user))
+                        .order_by(ChatMessage.created_at)
+                    )
+                    chat_res = await db.execute(chat_q)
+                    prev_chats = chat_res.scalars().all()
+                    conversation_history = [
+                        {
+                            "speaker": c.user.full_name if c.user else "AI Judge",
+                            "content": c.content,
+                        }
+                        for c in prev_chats
+                    ]
 
-                # generate AI response (with investor personality)
+                # generate AI response (with investor personality + dynamic questioning)
                 ai_response = await asyncio.to_thread(
                     generate_gemini_response,
                     user_message.content,
                     investor_archetype,
+                    conversation_history,
                 )
 
                 # save AI message
@@ -364,7 +385,7 @@ async def websocket_room(
                 )
 
             elif message_data.get("action") == "ice-candidate":
-                to_email = message_data.get("to")
+                to_email = message_data.get("to") or message_data.get("to_email")
                 candidate = message_data.get("candidate")
                 if to_email and candidate:
                     await manager.send_to_user(
@@ -373,4 +394,10 @@ async def websocket_room(
                     )
 
     except WebSocketDisconnect:
+        email = manager.socket_to_email.get(websocket)
         manager.disconnect(websocket, room_id)
+        if email:
+            await manager.broadcast(
+                json.dumps({"action": "user-left", "email": email}),
+                room_id,
+            )
