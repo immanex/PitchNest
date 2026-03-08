@@ -14,8 +14,8 @@ try:
     import google.generativeai as genai
     if settings.GEMINI_API_KEY:
         genai.configure(api_key=settings.GEMINI_API_KEY)
-        _gemini_chat = genai.GenerativeModel("gemini-1.5-flash")
-        _gemini_pro = genai.GenerativeModel("gemini-1.5-pro")
+        _gemini_chat = genai.GenerativeModel("gemini-3-flash-preview")
+        _gemini_pro = genai.GenerativeModel("gemini-3-flash-preview")
 except Exception:
     pass
 

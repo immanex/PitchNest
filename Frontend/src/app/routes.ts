@@ -1,4 +1,4 @@
-import { createBrowserRouter } from "react-router";
+import { createBrowserRouter } from "react-router-dom";
 import Landing from "./pages/Landing";
 import ProfileSetup from "./pages/ProfileSetup";
 import ModeSelection from "./pages/ModeSelection";
@@ -11,6 +11,11 @@ import ResetPassword from "./pages/ResetPassword";
 import EmailVerification from "./pages/EmailVerification";
 import Dashboard from "./pages/Dashboard";
 import Settings from "./pages/Settings";
+import PrePitch from "./pages/PrePitch";
+import MyPitches from "./pages/MyPitches";
+import Analytics from "./pages/Analytics";
+
+import AppLayout from "./layout/AppLayout";
 
 export const router = createBrowserRouter([
   {
@@ -25,41 +30,41 @@ export const router = createBrowserRouter([
     path: "/login",
     Component: Login,
   },
-  {
-    path: "/forgot-password",
-    Component: ForgotPassword,
-  },
-  {
-    path: "/reset-password",
-    Component: ResetPassword,
-  },
-  {
-    path: "/verify-email",
-    Component: EmailVerification,
-  },
-  {
-    path: "/profile-setup",
-    Component: ProfileSetup,
-  },
-  {
-    path: "/dashboard",
 
-    Component: Dashboard,
-  },
+  /* DASHBOARD AREA */
   {
-    path: "/modes",
-    Component: ModeSelection,
+    path: "/",
+    Component: AppLayout,
+    children: [
+      {
+        path: "dashboard",
+        Component: Dashboard,
+      },
+      {
+        path: "pre-pitch",
+        Component: PrePitch,
+      },
+      {
+        path: "analytics",
+        Component: Analytics,
+      },
+      {
+        path: "settings",
+        Component: Settings,
+      },
+      {
+        path: "my-pitches",
+        Component: MyPitches,
+      },
+      {
+        path: "pitch-detail",
+        Component: PostPitchAnalytics,
+      },
+    ],
   },
+
   {
     path: "/room/:roomId",
     Component: LivePitchRoom,
-  },
-  {
-    path: "/analytics",
-    Component: PostPitchAnalytics,
-  },
-  {
-    path: "/settings",
-    Component: Settings,
   },
 ]);

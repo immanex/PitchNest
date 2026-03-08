@@ -51,6 +51,8 @@ export default function LivePitchRoom() {
   const voiceEnabledRef = useRef(voiceEnabled);
   voiceEnabledRef.current = voiceEnabled;
 
+  const BaseUrl = import.meta.env.VITE_BASE_URL || "http://localhost:8000";
+
   const peerContext = usePeer();
   const createOffer = peerContext?.createOffer;
   const peer = peerContext?.peer;
@@ -167,7 +169,7 @@ export default function LivePitchRoom() {
     }
   }, [isPaused]);
 
-  useEffect(() => { 
+  useEffect(() => {
     peer?.addEventListener("negotiationneeded", async () => {
       console.log("Negotiation needed");
       if (
@@ -175,7 +177,7 @@ export default function LivePitchRoom() {
         socketRef.current &&
         socketRef.current.readyState === WebSocket.OPEN
       ) {
-        const localoffer  = await peer.createOffer();
+        const localoffer = await peer.createOffer();
         const targetEmail = users.find((u) => u !== user?.email);
 
         socketRef.current.send(
@@ -188,7 +190,6 @@ export default function LivePitchRoom() {
       }
     });
   }, [createOffer, users, user?.email, peer]);
-
 
   // Simulate score changes
   useEffect(() => {
@@ -237,12 +238,10 @@ export default function LivePitchRoom() {
     if (!roomId || !token) return;
 
     const socket = new WebSocket(
-      `ws://localhost:8000/api/room/ws/${roomId}?token=${token}`,
+      `${BaseUrl.replace("https", "wss")}/api/room/ws/${roomId}?token=${token}`,
     );
 
     socket.onopen = () => {
-      
-
       console.log("Connected to room:", roomId);
     };
 
@@ -258,7 +257,9 @@ export default function LivePitchRoom() {
         }
 
         if (data.action === "user-joined") {
-          setUsers((prev) => (prev.includes(data.email) ? prev : [...prev, data.email]));
+          setUsers((prev) =>
+            prev.includes(data.email) ? prev : [...prev, data.email],
+          );
         }
         if (data.action === "user-left") {
           setUsers((prev) => prev.filter((u) => u !== data.email));
@@ -273,7 +274,12 @@ export default function LivePitchRoom() {
             window.speechSynthesis.cancel();
           }
           // Real-time voice output for AI responses (interruptions: user message cancels AI speech)
-          if (data.speaker === "AI Judge" && data.text && voiceEnabledRef.current && window.speechSynthesis) {
+          if (
+            data.speaker === "AI Judge" &&
+            data.text &&
+            voiceEnabledRef.current &&
+            window.speechSynthesis
+          ) {
             window.speechSynthesis.cancel();
             const u = new SpeechSynthesisUtterance(data.text);
             u.rate = 0.95;
@@ -322,7 +328,7 @@ export default function LivePitchRoom() {
   useEffect(() => {
     async function fetchChats() {
       const res = await fetch(
-        `http://localhost:8000/api/room/chats/${roomId}`,
+        `${BaseUrl}/api/room/chats/${roomId}`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -371,7 +377,7 @@ export default function LivePitchRoom() {
   async function handleSessionEnd(): Promise<void> {
     try {
       const response = await fetch(
-        `http://localhost:8000/api/room/end/${roomId}`,
+        `${BaseUrl}/api/room/end/${roomId}`,
         {
           method: "PUT",
           headers: {
@@ -452,11 +458,17 @@ export default function LivePitchRoom() {
               if (!voiceEnabled === false) window.speechSynthesis?.cancel();
             }}
             className={`p-3 rounded-xl transition-all ${
-              voiceEnabled ? "bg-white/10 hover:bg-white/20" : "bg-amber-500/20 border border-amber-500/50"
+              voiceEnabled
+                ? "bg-white/10 hover:bg-white/20"
+                : "bg-amber-500/20 border border-amber-500/50"
             }`}
             title={voiceEnabled ? "AI voice on" : "AI voice off"}
           >
-            {voiceEnabled ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5 text-amber-500" />}
+            {voiceEnabled ? (
+              <Volume2 className="w-5 h-5" />
+            ) : (
+              <VolumeX className="w-5 h-5 text-amber-500" />
+            )}
           </button>
           <button
             onClick={() => setIsPaused(!isPaused)}
