@@ -16,6 +16,16 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       
+      - name: Debug secrets
+        run: |
+          echo "Checking if GCP_SA_KEY is set"
+          if [ -z "${{ secrets.GCP_SA_KEY }}" ]; then
+            echo "GCP_SA_KEY is empty or not set"
+            exit 1
+          else
+            echo "GCP_SA_KEY is set"
+          fi
+      
       - id: auth
         uses: google-github-actions/auth@v1
         with:
