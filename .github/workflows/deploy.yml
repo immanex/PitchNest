@@ -19,7 +19,7 @@ jobs:
       - id: auth
         uses: google-github-actions/auth@v1
         with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          credentials_json: '${{ secrets.GCP_SA_KEY }}'
       
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v1
@@ -46,14 +46,14 @@ jobs:
       - id: auth
         uses: google-github-actions/auth@v1
         with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          credentials_json: '${{ secrets.GCP_SA_KEY }}'
       
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v1
       
       - name: Build Frontend
         run: |
-          gcloud builds submit Frontend/ --tag ${{ env.FRONTEND_IMAGE }} -f Frontend/Dockerfile.cloud
+          gcloud builds submit Frontend/ --tag ${{ env.FRONTEND_IMAGE }} --config Frontend/cloudbuild.yaml
       
       - name: Deploy Frontend
         run: |
