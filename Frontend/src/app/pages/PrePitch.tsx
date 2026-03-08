@@ -48,7 +48,6 @@ const INVESTOR_PERSONALITIES = [
 ];
 import { useUser } from "../context/UserContext";
 
-
 export default function PrePitchSetup() {
   const [mode, setMode] = useState("investor");
   const [camera, setCamera] = useState(true);
@@ -58,27 +57,34 @@ export default function PrePitchSetup() {
   const location = useLocation();
   const [investorArchetype, setInvestorArchetype] =
     useState<string>("friendly");
-const BaseUrl = import.meta.env.VITE_BASE_URL || "http://localhost:8000";
+  const [industry, setIndustry] = useState<string>("SaaS & Enterprise");
+  const BaseUrl = import.meta.env.VITE_BASE_URL || "http://localhost:8000";
 
-  const { industry, startupType, experience } = location.state || {};
   const { user } = useUser();
   async function handlePitchSelection(modeId: string) {
-    localStorage.setItem("selectedMode", modeId);
-    let room = await fetch(`${BaseUrl}/api/room/create`, {
+    console.log("Selected mode:", modeId);
+    console.log("User:", user);
+
+    console.log("Investor Archetype:", investorArchetype);
+
+    localStorage.setItem("selectedMode", mode);
+    const response = await fetch(`${BaseUrl}/api/room/create`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${localStorage.getItem("token")}`,
       },
       body: JSON.stringify({
-        user_id: user?.id,
-        industry,
-        startup_type: startupType,
-        experience_level: experience,
-        modeId,
+        user_id: user?.id ?? null,
+        industry: industry,
+        startup_type: "SaaS & Enterprise",
+        experience_level: "First-time Founder",
+        mode: mode,
         investor_archetype: investorArchetype,
       }),
-    }).then((res) => res.json());
+    });
+
+    const room = await response.json();
     console.log("Created room:", room);
     localStorage.setItem("roomId", room.room_id);
 
@@ -105,7 +111,6 @@ const BaseUrl = import.meta.env.VITE_BASE_URL || "http://localhost:8000";
             {/* MODE SELECTION */}
             <div className="relative z-10 max-w-7xl mx-auto py-12">
               <div className="mb-12">
-                
                 <h1 className="text-4xl mb-3">Choose Your Mode</h1>
                 <p className="text-gray-400 text-lg">
                   Select how you want to practice your pitch today
@@ -178,7 +183,10 @@ const BaseUrl = import.meta.env.VITE_BASE_URL || "http://localhost:8000";
                     Select Industry
                   </label>
 
-                  <select className="w-full mt-1 p-3 border border-gray-200 dark:border-white/10 rounded-lg bg-white dark:bg-white/5">
+                  <select
+                   
+                    className="w-full mt-1 p-3 border border-gray-200 dark:border-white/10 rounded-lg bg-white dark:bg-white/5"
+                  >
                     <option>SaaS & Enterprise</option>
                     <option>AI / ML</option>
                     <option>Fintech</option>
@@ -272,7 +280,10 @@ const BaseUrl = import.meta.env.VITE_BASE_URL || "http://localhost:8000";
                 </div>
               </div>
 
-              <button className="px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-xl flex items-center gap-2">
+              <button
+                onClick={() => handlePitchSelection("")}
+                className="px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-xl flex items-center gap-2"
+              >
                 Start Session
                 <Play size={18} />
               </button>
@@ -348,4 +359,3 @@ function Toggle({ active, onClick }: { active: boolean; onClick: () => void }) {
     </button>
   );
 }
-

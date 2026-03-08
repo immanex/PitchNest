@@ -1,132 +1,126 @@
-import { useState, useEffect, useRef, use } from "react";
-import { useParams, Link } from "react-router";
-import { motion, AnimatePresence } from "motion/react";
-import ReactPlayer from "react-player";
+import { useState, useEffect, useRef } from "react";
+import { useParams, Link } from "react-router-dom";
 import {
   Video,
   VideoOff,
   Mic,
   MicOff,
-  Pause,
-  Play,
-  MessageSquare,
-  X,
-  Send,
+  Bell,
   ChevronLeft,
   ChevronRight,
-  Volume2,
-  VolumeX,
+  Monitor,
+  Layout
 } from "lucide-react";
+
 import { useUser } from "../context/UserContext";
 import { usePeer } from "../context/peer";
 
-const INVESTOR_PERSONAS = [
-  { id: "aggressive", name: "Aggressive VC", avatar: "💼", color: "#EF4444" },
-  { id: "friendly", name: "Friendly Angel", avatar: "😊", color: "#10B981" },
-  { id: "analytical", name: "Analytical", avatar: "📊", color: "#3B82F6" },
-  { id: "technical", name: "Technical", avatar: "⚙️", color: "#8B5CF6" },
-  { id: "skeptic", name: "Skeptic", avatar: "🤔", color: "#F59E0B" },
-];
+/* ---------- AI PANEL DATA ---------- */
 
-const mockTranscript = [
-  { speaker: "You", text: "Hello everyone, today I'd like to present..." },
-  { speaker: "The Skeptic", text: "What's your customer acquisition cost?" },
+const INVESTOR_PERSONAS = [
+  { id: "1", name: "Dr. Aris", status: "Listening", role: "TECH SPECIALIST", sentiment: "POSITIVE", color: "bg-emerald-500", width: "90%" },
+  { id: "2", name: "Sarah AI", status: "Thinking...", role: "MARKET ANALYSIS", sentiment: "NEUTRAL", color: "bg-orange-400", width: "60%" },
+  { id: "3", name: "Marcus AI", status: "Listening", role: "FINANCIALS", sentiment: "VERY POSITIVE", color: "bg-blue-400", width: "95%" },
 ];
 
 export default function LivePitchRoom() {
-  const [isVideoOn, setIsVideoOn] = useState(true);
-  const [isMicOn, setIsMicOn] = useState(true);
-  const [isPaused, setIsPaused] = useState(false);
-  const [isChatOpen, setIsChatOpen] = useState(false);
-  const [currentSlide, setCurrentSlide] = useState(1);
-  const [chatMessage, setChatMessage] = useState("");
-  const [elapsedTime, setElapsedTime] = useState(0);
-  const [transcript, setTranscript] = useState(mockTranscript);
-  const { token, user, rooms } = useUser();
-  const [users, setUsers] = useState<string[]>([]);
+  const { roomId } = useParams();
 
-  const [myStream, setMyStream] = useState<MediaStream | null>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const [voiceEnabled, setVoiceEnabled] = useState(true);
-  const voiceEnabledRef = useRef(voiceEnabled);
-  voiceEnabledRef.current = voiceEnabled;
-
-  const BaseUrl = import.meta.env.VITE_BASE_URL || "http://localhost:8000";
-
+  const { token, user } = useUser();
   const peerContext = usePeer();
-  const createOffer = peerContext?.createOffer;
+
   const peer = peerContext?.peer;
+  const createOffer = peerContext?.createOffer;
   const createAnswer = peerContext?.createAnswer;
   const setRemoteAnswer = peerContext?.setRemoteAnswer;
 
-  const { roomId: roomId } = useParams();
-  const socketRef = useRef<WebSocket | null>(null);
+  const BaseUrl = import.meta.env.VITE_BASE_URL || "http://localhost:8000";
 
-  // Simulated live scores
+  const socketRef = useRef<WebSocket | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  const [users, setUsers] = useState<string[]>([]);
+  const [myStream, setMyStream] = useState<MediaStream | null>(null);
+
+  const [isVideoOn, setIsVideoOn] = useState(true);
+  const [isMicOn, setIsMicOn] = useState(true);
+
+  const [elapsedTime, setElapsedTime] = useState(0);
+
   const [scores, setScores] = useState({
-    clarity: 72,
-    confidence: 68,
-    marketFit: 85,
+    clarity: 94,
+    confidence: 88,
+    marketFit: 76,
   });
 
-  // handle on camata
-  const handleOnCamara = async () => {
-    if (isVideoOn) {
-      // TURN OFF CAMERA
-      if (myStream) {
-        myStream.getTracks().forEach((track) => track.stop());
-      }
+  const [transcript, setTranscript] = useState<any[]>([]);
 
+  const [slideView, setSlideView] = useState(true); // switch slide <-> video
+
+  /* ---------- TIMER ---------- */
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setElapsedTime((p) => p + 1);
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, []);
+
+  const formatTime = (s: number) => {
+    const m = Math.floor(s / 60);
+    const sec = s % 60;
+    return `${m.toString().padStart(2, "0")}:${sec.toString().padStart(2, "0")}`;
+  };
+
+  /* ---------- CAMERA ---------- */
+
+  const handleCameraToggle = async () => {
+    if (isVideoOn) {
+      myStream?.getTracks().forEach((track) => track.stop());
       setMyStream(null);
       setIsVideoOn(false);
       return;
     }
 
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: true,
-        audio: isMicOn,
-      });
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: true,
+      audio: isMicOn,
+    });
 
-      // ✅ ADD STREAM TO STATE
-      setMyStream(stream);
+    setMyStream(stream);
 
-      // ✅ SHOW LOCAL VIDEO
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-      }
+    if (videoRef.current) {
+      videoRef.current.srcObject = stream;
+    }
 
-      // ✅ ADD TRACKS TO PEER (IMPORTANT FOR WEBRTC)
-      stream.getTracks().forEach((track) => {
-        peer?.addTrack(track, stream);
-      });
+    stream.getTracks().forEach((track) => {
+      peer?.addTrack(track, stream);
+    });
 
-      setIsVideoOn(true);
+    setIsVideoOn(true);
 
-      // START CALL
-      if (
-        createOffer &&
-        socketRef.current &&
-        socketRef.current.readyState === WebSocket.OPEN
-      ) {
-        console.log("Creating offer...");
-        const offer = await createOffer();
-        console.log("emails:", users);
-        const targetEmail = users.find((u) => u !== user?.email);
-        console.log("Target email:", targetEmail);
+    if (
+      createOffer &&
+      socketRef.current &&
+      socketRef.current.readyState === WebSocket.OPEN
+    ) {
+      const offer = await createOffer();
 
-        socketRef.current.send(
-          JSON.stringify({
-            action: "call-user",
-            user: targetEmail,
-            offer: offer,
-          }),
-        );
-      }
-    } catch (err) {
-      console.error("Camera error", err);
+      const targetEmail = users.find((u) => u !== user?.email);
+
+      socketRef.current.send(
+        JSON.stringify({
+          action: "call-user",
+          user: targetEmail,
+          offer: offer,
+        })
+      );
     }
   };
+
+  /* ---------- MIC ---------- */
+
   const handleMicToggle = () => {
     if (!myStream) {
       setIsMicOn(!isMicOn);
@@ -140,621 +134,352 @@ export default function LivePitchRoom() {
     setIsMicOn(!isMicOn);
   };
 
-  const getUserMediaStream = async (): Promise<void> => {
-    try {
-      const stream: MediaStream = await navigator.mediaDevices.getUserMedia({
-        audio: true,
-        video: true,
-      });
+  /* ---------- SOCKET ---------- */
 
-      setMyStream(stream);
-    } catch (error) {
-      console.error("Error accessing media devices:", error);
-    }
-  };
-
-  useEffect(() => {
-    if (videoRef.current && myStream) {
-      videoRef.current.srcObject = myStream;
-    }
-  }, [myStream]);
-
-  // Timer
-  useEffect(() => {
-    if (!isPaused) {
-      const timer = setInterval(() => {
-        setElapsedTime((prev) => prev + 1);
-      }, 1000);
-      return () => clearInterval(timer);
-    }
-  }, [isPaused]);
-
-  useEffect(() => {
-    peer?.addEventListener("negotiationneeded", async () => {
-      console.log("Negotiation needed");
-      if (
-        createOffer &&
-        socketRef.current &&
-        socketRef.current.readyState === WebSocket.OPEN
-      ) {
-        const localoffer = await peer.createOffer();
-        const targetEmail = users.find((u) => u !== user?.email);
-
-        socketRef.current.send(
-          JSON.stringify({
-            action: "call-user",
-            user: targetEmail,
-            offer: localoffer,
-          }),
-        );
-      }
-    });
-  }, [createOffer, users, user?.email, peer]);
-
-  // Simulate score changes
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setScores((prev) => ({
-        clarity: Math.min(100, prev.clarity + Math.floor(Math.random() * 3)),
-        confidence: Math.min(
-          100,
-          prev.confidence + Math.floor(Math.random() * 2),
-        ),
-        marketFit: Math.min(
-          100,
-          prev.marketFit + Math.floor(Math.random() * 2),
-        ),
-      }));
-    }, 3000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, "0")}`;
-  };
-
-  useEffect(() => {
-    if (!peer || !socketRef.current) return;
-
-    peer.onicecandidate = (event) => {
-      if (event.candidate && socketRef.current?.readyState === WebSocket.OPEN) {
-        const targetEmail = users.find((u) => u !== user?.email);
-        if (targetEmail) {
-          socketRef.current.send(
-            JSON.stringify({
-              action: "ice-candidate",
-              to: targetEmail,
-              candidate: event.candidate,
-            }),
-          );
-        }
-      }
-    };
-  }, [peer, users, user?.email]);
-  // 1. Update the useEffect to handle incoming data
   useEffect(() => {
     if (!roomId || !token) return;
 
     const socket = new WebSocket(
-      `${BaseUrl.replace("https", "wss")}/api/room/ws/${roomId}?token=${token}`,
+      `${BaseUrl.replace("https", "wss")}/api/room/ws/${roomId}?token=${token}`
     );
 
+    socketRef.current = socket;
+
     socket.onopen = () => {
-      console.log("Connected to room:", roomId);
+      console.log("Connected to room", roomId);
     };
 
     socket.onmessage = async (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        console.log("Received:", data);
+      const data = JSON.parse(event.data);
 
-        // Listen for the "send-message" action broadcasted by the server
+      if (data.action === "room-users") setUsers(data.users);
 
-        if (data.action === "room-users") {
-          setUsers(data.users);
-        }
+      if (data.action === "user-joined") {
+        setUsers((prev) =>
+          prev.includes(data.email) ? prev : [...prev, data.email]
+        );
+      }
 
-        if (data.action === "user-joined") {
-          setUsers((prev) =>
-            prev.includes(data.email) ? prev : [...prev, data.email],
+      if (data.action === "user-left") {
+        setUsers((prev) => prev.filter((u) => u !== data.email));
+      }
+
+      if (data.action === "send-message") {
+        setTranscript((prev) => [
+          ...prev,
+          { speaker: data.speaker, text: data.text },
+        ]);
+      }
+
+      if (data.action === "incoming-call") {
+        if (createAnswer) {
+          const answer = await createAnswer(data.offer);
+
+          socketRef.current?.send(
+            JSON.stringify({
+              action: "call-accepted",
+              to: data.from,
+              answer,
+            })
           );
         }
-        if (data.action === "user-left") {
-          setUsers((prev) => prev.filter((u) => u !== data.email));
-        }
-        if (data.action === "send-message") {
-          setTranscript((prev) => [
-            ...prev,
-            { speaker: data.speaker, text: data.text },
-          ]);
-          // Handle interruptions: stop AI voice when user sends message
-          if (data.speaker !== "AI Judge" && window.speechSynthesis?.speaking) {
-            window.speechSynthesis.cancel();
-          }
-          // Real-time voice output for AI responses (interruptions: user message cancels AI speech)
-          if (
-            data.speaker === "AI Judge" &&
-            data.text &&
-            voiceEnabledRef.current &&
-            window.speechSynthesis
-          ) {
-            window.speechSynthesis.cancel();
-            const u = new SpeechSynthesisUtterance(data.text);
-            u.rate = 0.95;
-            u.pitch = 1;
-            window.speechSynthesis.speak(u);
-          }
-        }
-        if (data.action === "incoming-call") {
-          if (createAnswer) {
-            const answer = await createAnswer(data.offer);
-            console.log(answer);
+      }
 
-            socketRef.current?.send(
-              JSON.stringify({
-                action: "call-accepted",
-                to: data.from,
-                answer: answer,
-              }),
-            );
-          }
-        }
-        if (data.action == "call-accepted") {
-          const { answer } = data;
-          if (setRemoteAnswer) await setRemoteAnswer(answer);
-        }
+      if (data.action === "call-accepted") {
+        if (setRemoteAnswer) await setRemoteAnswer(data.answer);
+      }
 
-        if (data.action === "ice-candidate") {
-          await peer?.addIceCandidate(data.candidate);
-        }
-
-        // Pro Tip: You can also update scores in real-time here
-        if (data.type === "SCORE_UPDATE") {
-          setScores(data.scores);
-        }
-      } catch (err) {
-        console.error("Failed to parse socket message:", err);
+      if (data.type === "SCORE_UPDATE") {
+        setScores(data.scores);
       }
     };
-
-    socket.onclose = () => console.log("Disconnected");
-    socketRef.current = socket;
 
     return () => socket.close();
   }, [roomId, token]);
 
+  /* ---------- FETCH CHATS ---------- */
+
   useEffect(() => {
     async function fetchChats() {
-      const res = await fetch(
-        `${BaseUrl}/api/room/chats/${roomId}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        },
-      );
+      const res = await fetch(`${BaseUrl}/api/room/chats/${roomId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
-      const chatData = await res.json();
+      const data = await res.json();
 
-      const formattedChats = chatData.map((chat: any) => ({
-        speaker: chat.speaker || "Unknown",
+      const formatted = data.map((chat: any) => ({
+        speaker: chat.speaker,
         text: chat.content,
       }));
 
-      setTranscript(formattedChats);
+      setTranscript(formatted);
     }
 
-    if (roomId && token) {
-      fetchChats();
-    }
+    if (roomId && token) fetchChats();
   }, [roomId, token]);
-  // 2. Clean up handleChat
-  function handleChat() {
-    if (chatMessage.trim() && socketRef.current) {
-      const payload = JSON.stringify({
-        action: "send-message",
-        roomId: roomId,
-        user_id: user?.id,
-        text: chatMessage,
-        speaker: user?.full_name || "You",
-      });
 
-      socketRef.current.send(payload);
-      setChatMessage("");
+  /* ---------- END SESSION ---------- */
+
+  async function handleSessionEnd() {
+    const res = await fetch(`${BaseUrl}/api/room/end/${roomId}`, {
+      method: "PUT",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    const data = await res.json();
+
+    if (res.ok) {
+      window.location.href = `/analytics?pitch_id=${data.pitch_id}`;
     }
   }
-  useEffect(() => {
-    return () => {
-      if (myStream) {
-        myStream.getTracks().forEach((track) => track.stop());
-      }
-      window.speechSynthesis?.cancel();
-    };
-  }, [myStream]);
 
-  async function handleSessionEnd(): Promise<void> {
-    try {
-      const response = await fetch(
-        `${BaseUrl}/api/room/end/${roomId}`,
-        {
-          method: "PUT",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        },
-      );
+  /* ---------- UI ---------- */
 
-      const data = await response.json();
-
-      if (response.ok) {
-        console.log("Session ended successfully", data);
-        const pitchId = data?.pitch_id ? `?pitch_id=${data.pitch_id}` : "";
-        window.location.href = `/analytics${pitchId}`;
-      } else {
-        console.error("Failed to end session:", data?.message || data);
-      }
-    } catch (error) {
-      console.error("Error ending session:", error);
-    }
-  }
   return (
-    <div className="h-screen bg-[#0D1117] text-white flex flex-col overflow-hidden">
-      {/* Top Bar */}
+    <div className="h-screen flex flex-col bg-[#F8FAFC] font-sans text-slate-900">
 
-      <div className="px-6 py-4 border-b border-white/10 flex items-center justify-between backdrop-blur-sm bg-[#0D1117]/80">
-        <div className="flex items-center gap-4">
-          <Link
-            to="/dashboard"
-            className="text-gray-400 hover:text-white transition-colors"
-          >
-            <ChevronLeft className="w-5 h-5" />
-          </Link>
-          <div>
-            <h2 className="text-lg">AI Investor Panel</h2>
-            <div className="text-sm text-gray-400">
-              Session Time: {formatTime(elapsedTime)}
+      {/* HEADER */}
+
+      <header className="flex items-center justify-between px-8 py-3 bg-white border-b border-slate-200">
+
+        <div className="flex items-center gap-8">
+
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center text-white">
+              <Layout size={18} />
             </div>
-            <h1 className="cursor-pointer">On camara</h1>
+            <span className="font-bold text-xl tracking-tight">
+              PitchNest
+            </span>
+          </div>
+
+          <div className="flex items-center gap-4">
+
+            <div className="flex items-center gap-2 px-3 py-1 bg-red-50 border border-red-100 rounded-full">
+              <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+              <span className="text-[10px] font-bold text-red-600 uppercase">
+                Live Pitch
+              </span>
+            </div>
+
+            <div className="text-lg font-medium text-slate-700 tabular-nums">
+              {formatTime(elapsedTime)}
+              <span className="text-xs text-slate-400 ml-1">
+                SESSION TIME
+              </span>
+            </div>
+
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
-          {/* Controls */}
-          <button
-            onClick={handleOnCamara}
-            className={`p-3 rounded-xl transition-all ${
-              isVideoOn
-                ? "bg-white/10 hover:bg-white/20"
-                : "bg-red-500/20 border border-red-500/50"
-            }`}
-          >
-            {isVideoOn ? (
-              <Video className="w-5 h-5" />
-            ) : (
-              <VideoOff className="w-5 h-5 text-red-500" />
-            )}
-          </button>
+        <Bell size={20} />
 
-          <button
-            onClick={handleMicToggle}
-            className={`p-3 rounded-xl transition-all ${
-              isMicOn
-                ? "bg-white/10 hover:bg-white/20"
-                : "bg-red-500/20 border border-red-500/50"
-            }`}
-          >
-            {isMicOn ? (
-              <Mic className="w-5 h-5" />
-            ) : (
-              <MicOff className="w-5 h-5 text-red-500" />
-            )}
-          </button>
+      </header>
 
-          <button
-            onClick={() => {
-              setVoiceEnabled(!voiceEnabled);
-              if (!voiceEnabled === false) window.speechSynthesis?.cancel();
-            }}
-            className={`p-3 rounded-xl transition-all ${
-              voiceEnabled
-                ? "bg-white/10 hover:bg-white/20"
-                : "bg-amber-500/20 border border-amber-500/50"
-            }`}
-            title={voiceEnabled ? "AI voice on" : "AI voice off"}
-          >
-            {voiceEnabled ? (
-              <Volume2 className="w-5 h-5" />
-            ) : (
-              <VolumeX className="w-5 h-5 text-amber-500" />
-            )}
-          </button>
-          <button
-            onClick={() => setIsPaused(!isPaused)}
-            className="px-4 py-3 rounded-xl bg-[#3B82F6]/20 border border-[#3B82F6]/50 hover:bg-[#3B82F6]/30 transition-all flex items-center gap-2"
-          >
-            {isPaused ? (
-              <Play className="w-5 h-5" />
-            ) : (
-              <Pause className="w-5 h-5" />
-            )}
-            {isPaused ? "Resume" : "Pause"}
-          </button>
+      {/* MAIN */}
 
-          <button
-            className="px-4 py-3 rounded-xl bg-red-500/20 border border-red-500/50 hover:bg-red-500/30 transition-all flex items-center gap-2"
-            onClick={handleSessionEnd}
-          >
-            End Session
-          </button>
-        </div>
-      </div>
+      <main className="flex-1 grid grid-cols-12 overflow-hidden p-6 gap-6">
 
-      {/* Main Content */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Left Panel - Video & Slides */}
-        <div className="flex-1 p-6 space-y-4 overflow-y-auto">
-          {/* User Video Feed */}
-          <div className="aspect-video rounded-2xl bg-gradient-to-br from-[#1a1f2e] to-[#0D1117] border border-white/10 overflow-hidden relative">
-            {isVideoOn && myStream ? (
+        {/* LEFT */}
+
+        <div className="col-span-9 flex flex-col gap-6">
+
+          {/* SWITCH VIEW AREA */}
+
+          <div className="flex-1 relative rounded-2xl overflow-hidden shadow-xl bg-[#1A4D4A]">
+
+            {slideView ? (
+
+              /* SLIDE */
+
+              <div className="h-full flex flex-col justify-end p-12 text-white">
+
+                <h1 className="text-5xl font-bold">
+                  Market Opportunity
+                </h1>
+
+                <p className="mt-4 text-lg opacity-80 max-w-xl">
+                  Targeting a $24B annual recurring market in sustainable
+                  home infrastructure with 18% CAGR.
+                </p>
+
+                <div className="flex gap-4 mt-6">
+                  <MetricCard label="CONFIDENCE" value={scores.confidence} color="text-blue-500" />
+                  <MetricCard label="CLARITY" value={scores.clarity} color="text-emerald-500" />
+                  <MetricCard label="MARKET SCORE" value={scores.marketFit} color="text-purple-500" />
+                </div>
+
+              </div>
+
+            ) : (
+
+              /* VIDEO FULL */
+
               <video
                 ref={videoRef}
                 autoPlay
-                playsInline
+                muted
+                className="w-full h-full object-cover"
+              />
+
+            )}
+
+            {/* SWITCH BUTTON */}
+
+            <button
+              onClick={() => setSlideView(!slideView)}
+              className="absolute bottom-6 right-6 flex items-center gap-2 text-xs font-bold text-sky-400 bg-sky-400/10 px-3 py-2 rounded-lg"
+            >
+              <Monitor size={14} />
+              SWITCH VIEW
+            </button>
+
+          </div>
+
+          {/* TRANSCRIPT */}
+
+          <div className="h-44 bg-white rounded-2xl border border-slate-200 shadow-sm p-6 overflow-auto">
+
+            <span className="text-[10px] font-bold text-slate-400 uppercase">
+              Real-time Transcription
+            </span>
+
+            <div className="mt-4 space-y-3">
+
+              {transcript.map((msg, i) => (
+                <p key={i} className="text-sm text-slate-600 italic">
+                  {msg.speaker === "Alex" && (
+                    <span className="font-bold text-slate-800 mr-2">
+                      Alex:
+                    </span>
+                  )}
+                  "{msg.text}"
+                </p>
+              ))}
+
+            </div>
+
+          </div>
+
+        </div>
+
+        {/* RIGHT PANEL */}
+
+        <div className="col-span-3 flex flex-col gap-6">
+
+          {/* VIDEO SMALL */}
+
+          <div className="relative rounded-2xl overflow-hidden bg-slate-900 aspect-video">
+
+            {isVideoOn ? (
+              <video
+                ref={videoRef}
+                autoPlay
                 muted
                 className="w-full h-full object-cover"
               />
             ) : (
-              <div className="w-full h-full flex items-center justify-center">
-                <div className="text-center">
-                  <>
-                    <VideoOff className="w-16 h-16 mx-auto mb-4 text-red-500" />
-                    <div className="text-gray-500">Camera is off</div>
-                  </>
-                </div>
+              <div className="w-full h-full flex items-center justify-center text-slate-500">
+                <VideoOff />
               </div>
             )}
-            <div className="absolute top-4 right-4 px-3 py-1 rounded-lg bg-black/50 backdrop-blur-sm text-sm">
-              You
-            </div>
-          </div>
 
-          {/* Slide Viewer */}
-          <div className="aspect-video rounded-2xl bg-white border border-white/10 overflow-hidden relative">
-            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200">
-              <div className="text-center">
-                <div className="text-6xl text-gray-400 mb-4">📊</div>
-                <div className="text-2xl text-gray-700 mb-2">
-                  Slide {currentSlide} of 10
-                </div>
-                <div className="text-gray-500">
-                  Your pitch deck appears here
-                </div>
-              </div>
-            </div>
+            <div className="absolute bottom-4 left-4 flex gap-2">
 
-            {/* Slide Navigation */}
-            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2">
               <button
-                onClick={() => setCurrentSlide(Math.max(1, currentSlide - 1))}
-                disabled={currentSlide === 1}
-                className="p-2 rounded-lg bg-black/50 backdrop-blur-sm hover:bg-black/70 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                onClick={handleCameraToggle}
+                className="w-9 h-9 bg-white/20 rounded-full flex items-center justify-center text-white"
               >
-                <ChevronLeft className="w-5 h-5 text-white" />
+                {isVideoOn ? <Video size={16} /> : <VideoOff size={16} />}
               </button>
-              <div className="px-4 py-2 rounded-lg bg-black/50 backdrop-blur-sm text-white text-sm">
-                {currentSlide} / 10
-              </div>
+
               <button
-                onClick={() => setCurrentSlide(Math.min(10, currentSlide + 1))}
-                disabled={currentSlide === 10}
-                className="p-2 rounded-lg bg-black/50 backdrop-blur-sm hover:bg-black/70 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                onClick={handleMicToggle}
+                className="w-9 h-9 bg-white/20 rounded-full flex items-center justify-center text-white"
               >
-                <ChevronRight className="w-5 h-5 text-white" />
+                {isMicOn ? <Mic size={16} /> : <MicOff size={16} />}
               </button>
+
             </div>
-          </div>
-        </div>
 
-        {/* Right Panel - AI Investors & Scores */}
-        <div className="w-[400px] border-l border-white/10 flex flex-col">
-          {/* AI Investor Avatars */}
-          <div className="p-6 space-y-4 border-b border-white/10">
-            <h3 className="text-sm text-gray-400 uppercase tracking-wider mb-4">
-              Investor Panel
-            </h3>
-            {INVESTOR_PERSONAS.map((investor) => (
-              <motion.div
-                key={investor.id}
-                className="p-4 rounded-2xl bg-white/5 backdrop-blur-sm border border-white/10"
-                animate={{
-                  borderColor: [
-                    "rgba(255,255,255,0.1)",
-                    `${investor.color}40`,
-                    "rgba(255,255,255,0.1)",
-                  ],
-                }}
-                transition={{
-                  duration: 3,
-                  repeat: Infinity,
-                  ease: "easeInOut",
-                }}
-              >
-                <div className="flex items-center gap-3">
-                  <div className="text-3xl">{investor.avatar}</div>
-                  <div className="flex-1">
-                    <div className="text-sm mb-1">{investor.name}</div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                      <span className="text-xs text-gray-400">Listening</span>
-                    </div>
-                  </div>
-                </div>
-              </motion.div>
-            ))}
+            <button
+              onClick={handleSessionEnd}
+              className="absolute bottom-4 right-4 bg-red-500 text-white text-xs px-4 py-2 rounded"
+            >
+              End Session
+            </button>
+
           </div>
 
-          {/* Live Scores */}
-          <div className="p-6 flex-1 overflow-y-auto">
-            <h3 className="text-sm text-gray-400 uppercase tracking-wider mb-6">
-              Live Scoring
+          {/* AI PANEL */}
+
+          <div className="flex-1 bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+
+            <h3 className="font-bold text-sm mb-4">
+              AI Panelists
             </h3>
+
             <div className="space-y-6">
-              <ScoreCircle
-                label="Clarity"
-                score={scores.clarity}
-                color="#3B82F6"
-              />
-              <ScoreCircle
-                label="Confidence"
-                score={scores.confidence}
-                color="#7C3AED"
-              />
-              <ScoreCircle
-                label="Market Fit"
-                score={scores.marketFit}
-                color="#10B981"
-              />
-            </div>
-          </div>
-        </div>
-      </div>
 
-      {/* Bottom Bar - Transcription */}
-      <div className="px-6 py-4 border-t border-white/10 backdrop-blur-sm bg-[#0D1117]/80">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex-1">
-            <div className="text-xs text-gray-400 uppercase tracking-wider mb-2">
-              Live Transcription
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-              <p className="text-sm text-gray-300">
-                "...and that's why our solution is uniquely positioned to
-                capture this market opportunity..."
-              </p>
-            </div>
-          </div>
+              {INVESTOR_PERSONAS.map((p) => (
 
-          <button
-            onClick={() => setIsChatOpen(!isChatOpen)}
-            className="p-3 rounded-xl bg-white/10 hover:bg-white/20 transition-all relative"
-          >
-            <MessageSquare className="w-5 h-5" />
-            <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-[#3B82F6] border-2 border-[#0D1117]" />
-          </button>
-        </div>
-      </div>
+                <div key={p.id}>
 
-      {/* Chat Sidebar */}
-      <AnimatePresence>
-        {isChatOpen && (
-          <motion.div
-            initial={{ x: "100%" }}
-            animate={{ x: 0 }}
-            exit={{ x: "100%" }}
-            transition={{ type: "spring", damping: 25, stiffness: 200 }}
-            className="fixed right-0 top-0 bottom-0 w-[400px] bg-[#0D1117] border-l border-white/10 flex flex-col z-50"
-          >
-            {/* Chat Header */}
-            <div className="p-4 border-b border-white/10 flex items-center justify-between">
-              <h3 className="text-lg">Questions & Notes</h3>
-              <button
-                onClick={() => setIsChatOpen(false)}
-                className="p-2 rounded-lg hover:bg-white/10 transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Chat Messages */}
-            <div className="flex-1 p-4 space-y-4 overflow-y-auto">
-              {transcript.map((msg, idx) => (
-                <div key={idx} className="space-y-1">
-                  <div className="text-xs text-gray-400">{msg.speaker}</div>
-                  <div className="p-3 rounded-xl bg-white/5 border border-white/10 text-sm">
-                    {msg.text}
+                  <div className="flex justify-between text-xs mb-1">
+                    <span className="font-bold">{p.name}</span>
+                    <span className="text-emerald-500">{p.sentiment}</span>
                   </div>
+
+                  <div className="h-1.5 bg-slate-100 rounded-full">
+
+                    <div
+                      className={`h-full ${p.color} rounded-full`}
+                      style={{ width: p.width }}
+                    />
+
+                  </div>
+
                 </div>
+
               ))}
+
             </div>
 
-            {/* Chat Input */}
-            <div className="p-4 border-t border-white/10">
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={chatMessage}
-                  onChange={(e) => setChatMessage(e.target.value)}
-                  placeholder="Type a note..."
-                  className="flex-1 px-4 py-3 rounded-xl bg-white/5 border border-white/10 focus:border-[#3B82F6]/50 focus:outline-none transition-colors"
-                />
-                <button
-                  onClick={handleChat}
-                  className="p-3 rounded-xl bg-gradient-to-r from-[#3B82F6] to-[#7C3AED] hover:shadow-[0_0_20px_rgba(59,130,246,0.5)] transition-all"
-                >
-                  <Send className="w-5 h-5" />
-                </button>
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          </div>
+
+        </div>
+
+      </main>
     </div>
   );
 }
 
-function ScoreCircle({
+function MetricCard({
   label,
-  score,
+  value,
   color,
 }: {
   label: string;
-  score: number;
+  value: number;
   color: string;
 }) {
-  const circumference = 2 * Math.PI * 45;
-  const offset = circumference - (score / 100) * circumference;
-
   return (
-    <div className="flex items-center gap-4">
-      <div className="relative w-24 h-24">
-        <svg className="w-24 h-24 -rotate-90">
-          <circle
-            cx="48"
-            cy="48"
-            r="45"
-            stroke="rgba(255,255,255,0.1)"
-            strokeWidth="8"
-            fill="none"
-          />
-          <motion.circle
-            cx="48"
-            cy="48"
-            r="45"
-            stroke={color}
-            strokeWidth="8"
-            fill="none"
-            strokeDasharray={circumference}
-            initial={{ strokeDashoffset: circumference }}
-            animate={{ strokeDashoffset: offset }}
-            transition={{ duration: 1, ease: "easeOut" }}
-            style={{
-              filter: `drop-shadow(0 0 8px ${color})`,
-            }}
-          />
-        </svg>
-        <div className="absolute inset-0 flex items-center justify-center text-xl">
-          {score}
-        </div>
+    <div className="bg-white rounded-xl p-4 w-28 shadow-xl">
+
+      <p className="text-[9px] font-bold text-slate-400 uppercase">
+        {label}
+      </p>
+
+      <div className="flex items-baseline gap-1">
+
+        <span className={`text-2xl font-black ${color}`}>
+          {value}
+        </span>
+
+        <span className="text-xs text-slate-300">%</span>
+
       </div>
-      <div className="flex-1">
-        <div className="text-sm mb-1">{label}</div>
-        <div className="text-xs text-gray-400">
-          {score >= 80 ? "Excellent" : score >= 60 ? "Good" : "Needs work"}
-        </div>
-      </div>
+
     </div>
   );
 }
