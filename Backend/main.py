@@ -1,11 +1,7 @@
-from db.models import Base
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from api import auth, onboarding, dashboard, socket, ai_routes
-from core.config import settings
-from db.database import engine
 
-app = FastAPI(title=settings.PROJECT_NAME)
+app = FastAPI(title="PitchNest Backend")
 
 app.add_middleware(
     CORSMiddleware,
@@ -15,11 +11,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(auth.router, prefix="/api")
-app.include_router(onboarding.router, prefix="/api")
-app.include_router(dashboard.router, prefix="/api")
-app.include_router(socket.router, prefix="/api")
-app.include_router(ai_routes.router, prefix="/api")
+# Import routes after app is created to avoid circular imports
+try:
+    from api import auth, onboarding, dashboard, socket, ai_routes
+    app.include_router(auth.router, prefix="/api")
+    app.include_router(onboarding.router, prefix="/api")
+    app.include_router(dashboard.router, prefix="/api")
+    app.include_router(socket.router, prefix="/api")
+    app.include_router(ai_routes.router, prefix="/api")
+except Exception as e:
+    print(f"Warning: Could not load all routes: {e}")
 
 
 @app.get("/")
