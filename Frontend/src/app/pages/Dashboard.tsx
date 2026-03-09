@@ -23,6 +23,7 @@ interface Pitch {
   title: string;
   date: string;
   score: number;
+  created_at: string;
 }
 
 const aiRecommendations = [
@@ -147,7 +148,7 @@ export default function Dashboard() {
                         </div>
 
                         <div className="text-xs text-gray-500 dark:text-gray-400">
-                          {pitch?.date || "Unknown"}
+                          {pitch?.created_at || "Unknown"}
                         </div>
                       </div>
 

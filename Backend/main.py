@@ -1,5 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from db.database import engine
+from db.models import Base
 
 app = FastAPI(title="PitchNest Backend")
 
@@ -48,6 +50,12 @@ async def test_db():
             return {"db_status": "connected", "result": result.scalar()}
     except Exception as e:
         return {"db_status": "failed", "error": str(e)}
+    
+    
+@app.on_event("startup")
+async def create_tables():
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
 
 
 if __name__ == "__main__":
