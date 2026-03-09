@@ -1,3 +1,4 @@
+/// <reference types="vite/client" />
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Mail, Lock, User, Rocket, Sun, Moon } from "lucide-react";

@@ -49,11 +49,6 @@ async def signup(user_in: UserCreate, db: AsyncSession = Depends(get_db)):
     await db.commit()
     await db.refresh(user)
 
-    # create token
-    # token = create_verification_token(user.email)
-
-    # send email
-    # await send_verification_email(user.email, token)
 
     return user
 
