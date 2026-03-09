@@ -8,6 +8,10 @@ app = FastAPI(title="PitchNest Backend")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
+        "https://pitchnest-frontend-10489410829.us-central1.run.app",
+        "http://localhost:5173",
+        "http://localhost:3000",
+        "*"
         "http://localhost:5173",
         "https://pitchnest-frontend-10489410829.us-central1.run.app"
     ],
