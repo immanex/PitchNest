@@ -1,37 +1,53 @@
 import { useState, useEffect, useRef } from "react";
-import { useParams, Link } from "react-router-dom";
-import {
-  Video,
-  VideoOff,
-  Mic,
-  MicOff,
-  Bell,
-  ChevronLeft,
-  ChevronRight,
-  Monitor,
-  Layout
-} from "lucide-react";
+import { useSearchParams, useParams, Link } from "react-router-dom";
+import { Video, VideoOff, Mic, MicOff, Bell, Layout } from "lucide-react";
 
 import { useUser } from "../context/UserContext";
 import { usePeer } from "../context/peer";
 import useTitle from "../hooks/useTitle";
-
+import { usePitch } from "../context/PitchContext";
+import PitchSlides from "../components/SlideViewer";
 
 /* ---------- AI PANEL DATA ---------- */
-
 const INVESTOR_PERSONAS = [
-  { id: "1", name: "Dr. Aris", status: "Listening", role: "TECH SPECIALIST", sentiment: "POSITIVE", color: "bg-emerald-500", width: "90%" },
-  { id: "2", name: "Sarah AI", status: "Thinking...", role: "MARKET ANALYSIS", sentiment: "NEUTRAL", color: "bg-orange-400", width: "60%" },
-  { id: "3", name: "Marcus AI", status: "Listening", role: "FINANCIALS", sentiment: "VERY POSITIVE", color: "bg-blue-400", width: "95%" },
+  {
+    id: "1",
+    name: "Dr. Aris",
+    role: "TECH SPECIALIST",
+    sentiment: "POSITIVE",
+    color: "bg-emerald-500",
+    width: "90%",
+  },
+  {
+    id: "2",
+    name: "Sarah AI",
+    role: "MARKET ANALYSIS",
+    sentiment: "NEUTRAL",
+    color: "bg-orange-400",
+    width: "60%",
+  },
+  {
+    id: "3",
+    name: "Marcus AI",
+    role: "FINANCIALS",
+    sentiment: "VERY POSITIVE",
+    color: "bg-blue-400",
+    width: "95%",
+  },
 ];
 
 export default function LivePitchRoom() {
   useTitle("Live Pitch Room");
+  const [searchParams] = useSearchParams();
+  const pitchId = searchParams.get("pitchId");
   const { roomId } = useParams();
+  const [endLoading, setEndLoding] = useState(false);
 
+  const { pitch, fetchPitch } = usePitch();
   const { token, user } = useUser();
   const peerContext = usePeer();
 
+  // Peer Connection logic
   const peer = peerContext?.peer;
   const createOffer = peerContext?.createOffer;
   const createAnswer = peerContext?.createAnswer;
@@ -40,33 +56,30 @@ export default function LivePitchRoom() {
   const BaseUrl = import.meta.env.VITE_BASE_URL || "http://localhost:8000";
 
   const socketRef = useRef<WebSocket | null>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const localVideoRef = useRef<HTMLVideoElement>(null); // Separate ref for preview
+  const remoteVideoRef = useRef<HTMLVideoElement>(null); // Ref for main stream
 
   const [users, setUsers] = useState<string[]>([]);
   const [myStream, setMyStream] = useState<MediaStream | null>(null);
-
   const [isVideoOn, setIsVideoOn] = useState(true);
   const [isMicOn, setIsMicOn] = useState(true);
-
   const [elapsedTime, setElapsedTime] = useState(0);
-
   const [scores, setScores] = useState({
     clarity: 94,
     confidence: 88,
     marketFit: 76,
   });
-
   const [transcript, setTranscript] = useState<any[]>([]);
+  const [slideView, setSlideView] = useState(true);
 
-  const [slideView, setSlideView] = useState(true); // switch slide <-> video
+  /* ---------- FETCH DATA ---------- */
+  useEffect(() => {
+    if (pitchId) fetchPitch(pitchId);
+  }, [pitchId]);
 
   /* ---------- TIMER ---------- */
-
   useEffect(() => {
-    const timer = setInterval(() => {
-      setElapsedTime((p) => p + 1);
-    }, 1000);
-
+    const timer = setInterval(() => setElapsedTime((p) => p + 1), 1000);
     return () => clearInterval(timer);
   }, []);
 
@@ -76,10 +89,8 @@ export default function LivePitchRoom() {
     return `${m.toString().padStart(2, "0")}:${sec.toString().padStart(2, "0")}`;
   };
 
-  /* ---------- CAMERA ---------- */
-
+  /* ---------- WEBRTC HANDLERS ---------- */
   const handleCameraToggle = async () => {
-
     if (isVideoOn) {
       myStream?.getTracks().forEach((track) => track.stop());
       setMyStream(null);
@@ -87,373 +98,245 @@ export default function LivePitchRoom() {
       return;
     }
 
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: true,
-      audio: isMicOn,
-    });
-
-    setMyStream(stream);
-
-    if (videoRef.current) {
-      videoRef.current.srcObject = stream;
-    }
-
-    stream.getTracks().forEach((track) => {
-      peer?.addTrack(track, stream);
-    });
-
-    setIsVideoOn(true);
-
-    if (
-      createOffer &&
-      socketRef.current &&
-      socketRef.current.readyState === WebSocket.OPEN
-    ) {
-      const offer = await createOffer();
-
-      const targetEmail = users.find((u) => u !== user?.email);
-
-      socketRef.current.send(
-        JSON.stringify({
-          action: "call-user",
-          user: targetEmail,
-          offer: offer,
-        })
-      );
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: isMicOn,
+      });
+      setMyStream(stream);
+      if (localVideoRef.current) localVideoRef.current.srcObject = stream;
+      setIsVideoOn(true);
+    } catch (err) {
+      console.error("Camera error:", err);
     }
   };
 
-  /* ---------- MIC ---------- */
-
   const handleMicToggle = () => {
-    if (!myStream) {
-      setIsMicOn(!isMicOn);
-      return;
+    if (myStream) {
+      myStream.getAudioTracks().forEach((track) => (track.enabled = !isMicOn));
     }
-
-    myStream.getAudioTracks().forEach((track) => {
-      track.enabled = !isMicOn;
-    });
-
     setIsMicOn(!isMicOn);
   };
 
   /* ---------- SOCKET ---------- */
-
   useEffect(() => {
     if (!roomId || !token) return;
 
+    const wsUrl = BaseUrl.startsWith("https")
+      ? BaseUrl.replace("https", "wss")
+      : BaseUrl.replace("http", "ws");
+
     const socket = new WebSocket(
-      `${BaseUrl.replace("https", "wss")}/api/room/ws/${roomId}?token=${token}`
+      `${wsUrl}/api/room/ws/${roomId}?token=${token}`,
     );
-
     socketRef.current = socket;
-
-    socket.onopen = () => {
-      console.log("Connected to room", roomId);
-    };
 
     socket.onmessage = async (event) => {
       const data = JSON.parse(event.data);
-
       if (data.action === "room-users") setUsers(data.users);
-
-      if (data.action === "user-joined") {
-        setUsers((prev) =>
-          prev.includes(data.email) ? prev : [...prev, data.email]
-        );
-      }
-
-      if (data.action === "user-left") {
-        setUsers((prev) => prev.filter((u) => u !== data.email));
-      }
-
-      if (data.action === "send-message") {
+      if (data.action === "send-message")
         setTranscript((prev) => [
           ...prev,
           { speaker: data.speaker, text: data.text },
         ]);
-      }
-
-      if (data.action === "incoming-call") {
-        if (createAnswer) {
-          const answer = await createAnswer(data.offer);
-
-          socketRef.current?.send(
-            JSON.stringify({
-              action: "call-accepted",
-              to: data.from,
-              answer,
-            })
-          );
-        }
-      }
-
-      if (data.action === "call-accepted") {
-        if (setRemoteAnswer) await setRemoteAnswer(data.answer);
-      }
-
-      if (data.type === "SCORE_UPDATE") {
-        setScores(data.scores);
-      }
+      // ... rest of your action logic
     };
 
     return () => socket.close();
   }, [roomId, token]);
-
-  /* ---------- FETCH CHATS ---------- */
-
-  useEffect(() => {
-    async function fetchChats() {
-      const res = await fetch(`${BaseUrl}/api/room/chats/${roomId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      const data = await res.json();
-
-      const formatted = data.map((chat: any) => ({
-        speaker: chat.speaker,
-        text: chat.content,
-      }));
-
-      setTranscript(formatted);
-    }
-
-    if (roomId && token) fetchChats();
-  }, [roomId, token]);
-
-  /* ---------- END SESSION ---------- */
-
-  async function handleSessionEnd() {
-    const res = await fetch(`${BaseUrl}/api/room/end/${roomId}`, {
+  async function handleEndSession() {
+    setEndLoding(true);
+    let res = await fetch(`${BaseUrl}/api/room/end/${roomId}`, {
       method: "PUT",
-      headers: { Authorization: `Bearer ${token}` },
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem("token")}`,
+      },
     });
-
-    const data = await res.json();
-
-    if (res.ok) {
-      window.location.href = `/analytics?pitch_id=${data.pitch_id}`;
+    res = await res.json();
+    console.log(res);
+    if (res) {
+      console.log("Successfully Ended");
+      window.location.href = "/dashboard";
+      setEndLoding(false);
+    } else {
+      console.log("Error in room ending");
+      setEndLoding(false);
     }
   }
 
-  /* ---------- UI ---------- */
-
   return (
-
     <div className="h-screen flex flex-col bg-[#F8FAFC] font-sans text-slate-900">
-
       {/* HEADER */}
-
       <header className="flex items-center justify-between px-8 py-3 bg-white border-b border-slate-200">
-
         <div className="flex items-center gap-8">
-
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center text-white">
+            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white">
               <Layout size={18} />
             </div>
-            <span className="font-bold text-xl tracking-tight">
-              PitchNest
-            </span>
+            <span className="font-bold text-xl">PitchNest</span>
           </div>
-
           <div className="flex items-center gap-4">
-
-            <div className="flex items-center gap-2 px-3 py-1 bg-red-50 border border-red-100 rounded-full">
+            <div className="flex items-center gap-2 px-3 py-1 bg-red-50 rounded-full">
               <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
               <span className="text-[10px] font-bold text-red-600 uppercase">
-                Live Pitch
+                Live
               </span>
             </div>
-
-            <div className="text-lg font-medium text-slate-700 tabular-nums">
+            <div className="text-lg font-medium tabular-nums">
               {formatTime(elapsedTime)}
-              <span className="text-xs text-slate-400 ml-1">
-                SESSION TIME
-              </span>
             </div>
-
           </div>
         </div>
-
-        <Bell size={20} />
-
+        <div className="flex gap-4">
+          <button
+            onClick={() => setSlideView(!slideView)}
+            className="px-4 py-2 bg-slate-100 rounded-lg text-sm font-semibold"
+          >
+            {slideView ? "View Video" : "View Slides"}
+          </button>
+          <Bell size={20} className="text-slate-400" />
+        </div>
       </header>
 
       {/* MAIN */}
-
       <main className="flex-1 grid grid-cols-12 overflow-hidden p-6 gap-6">
-
-        {/* LEFT */}
-
         <div className="col-span-9 flex flex-col gap-6">
-
-          {/* SWITCH VIEW AREA */}
-
-          <div className="flex-1 relative rounded-2xl overflow-hidden shadow-xl bg-[#1A4D4A]">
-
+          <div className="flex-1 relative rounded-2xl overflow-hidden shadow-xl bg-[#0a2624]">
             {slideView ? (
-
-              /* SLIDE */
-
-              <div className="h-full flex flex-col justify-end p-12 text-white">
-
-                <h1 className="text-5xl font-bold">
-                  Market Opportunity
-                </h1>
-
-                <p className="mt-4 text-lg opacity-80 max-w-xl">
-                  Targeting a $24B annual recurring market in sustainable
-                  home infrastructure with 18% CAGR.
-                </p>
-
-                <div className="flex gap-4 mt-6">
-                  <MetricCard label="CONFIDENCE" value={scores.confidence} color="text-blue-500" />
-                  <MetricCard label="CLARITY" value={scores.clarity} color="text-emerald-500" />
-                  <MetricCard label="MARKET SCORE" value={scores.marketFit} color="text-purple-500" />
+              <div className="relative h-full w-full flex flex-col items-center justify-center">
+                <div className="w-full h-full flex items-center justify-center overflow-hidden p-4">
+                  {pitch?.pitch_pdf_url && (
+                    <PitchSlides
+                      pdfUrl={`${BaseUrl}/uploads/${pitch.pitch_pdf_url.replace("uploads/", "")}`}
+                    />
+                  )}
                 </div>
 
+                <div className="absolute bottom-0 left-0 right-0 p-8 bg-gradient-to-t from-black/90 to-transparent text-white">
+                  <h1 className="text-3xl font-bold">
+                    {pitch?.pitch_name || "Pitch Presentation"}
+                  </h1>
+                  <div className="flex gap-3 mt-4">
+                    <MetricCard
+                      label="CONFIDENCE"
+                      value={scores.confidence}
+                      color="text-blue-400"
+                    />
+                    <MetricCard
+                      label="CLARITY"
+                      value={scores.clarity}
+                      color="text-emerald-400"
+                    />
+                    <MetricCard
+                      label="MARKET"
+                      value={scores.marketFit}
+                      color="text-purple-400"
+                    />
+                  </div>
+                </div>
               </div>
-
             ) : (
-
-              /* VIDEO FULL */
-
               <video
-                ref={videoRef}
+                ref={remoteVideoRef}
                 autoPlay
-                muted
-                className="w-full h-full object-cover"
+                className="w-full h-full object-cover bg-slate-800"
               />
-
             )}
-
-            {/* SWITCH BUTTON */}
-
-            <button
-              onClick={() => setSlideView(!slideView)}
-              className="absolute bottom-6 right-6 flex items-center gap-2 text-xs font-bold text-sky-400 bg-sky-400/10 px-3 py-2 rounded-lg"
-            >
-              <Monitor size={14} />
-              SWITCH VIEW
-            </button>
-
           </div>
 
           {/* TRANSCRIPT */}
-
-          <div className="h-44 bg-white rounded-2xl border border-slate-200 shadow-sm p-6 overflow-auto">
-
+          <div className="h-44 bg-white rounded-2xl border border-slate-200 shadow-sm p-6 overflow-y-auto">
             <span className="text-[10px] font-bold text-slate-400 uppercase">
-              Real-time Transcription
+              Live Transcript
             </span>
-
-            <div className="mt-4 space-y-3">
-
+            <div className="mt-4 space-y-2">
               {transcript.map((msg, i) => (
-                <p key={i} className="text-sm text-slate-600 italic">
-                  {msg.speaker === "Alex" && (
-                    <span className="font-bold text-slate-800 mr-2">
-                      Alex:
-                    </span>
-                  )}
+                <p key={i} className="text-sm text-slate-600">
+                  <span className="font-bold text-slate-800 uppercase text-[10px] mr-2">
+                    {msg.speaker}:
+                  </span>
                   "{msg.text}"
                 </p>
               ))}
-
             </div>
-
           </div>
-
         </div>
 
         {/* RIGHT PANEL */}
-
         <div className="col-span-3 flex flex-col gap-6">
-
-          {/* VIDEO SMALL */}
-
-          <div className="relative rounded-2xl overflow-hidden bg-slate-900 aspect-video">
-
-            {isVideoOn ? (
-              <video
-                ref={videoRef}
-                autoPlay
-                muted
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center text-slate-500">
-                <VideoOff />
+          <div className="relative rounded-2xl overflow-hidden bg-slate-900 aspect-video shadow-lg">
+            <video
+              ref={localVideoRef}
+              autoPlay
+              muted
+              className="w-full h-full object-cover"
+            />
+            {!isVideoOn && (
+              <div className="absolute inset-0 flex items-center justify-center bg-slate-800">
+                <VideoOff className="text-slate-600" />
               </div>
             )}
 
             <div className="absolute bottom-4 left-4 flex gap-2">
-
               <button
                 onClick={handleCameraToggle}
-                className="w-9 h-9 bg-white/20 rounded-full flex items-center justify-center text-white"
+                className="p-2 bg-black/40 hover:bg-black/60 rounded-full text-white backdrop-blur-md"
               >
                 {isVideoOn ? <Video size={16} /> : <VideoOff size={16} />}
               </button>
-
               <button
                 onClick={handleMicToggle}
-                className="w-9 h-9 bg-white/20 rounded-full flex items-center justify-center text-white"
+                className="p-2 bg-black/40 hover:bg-black/60 rounded-full text-white backdrop-blur-md"
               >
                 {isMicOn ? <Mic size={16} /> : <MicOff size={16} />}
               </button>
-
             </div>
-
-            <button
-              onClick={handleSessionEnd}
-              className="absolute bottom-4 right-4 bg-red-500 text-white text-xs px-4 py-2 rounded"
-            >
-              End Session
-            </button>
-
           </div>
 
-          {/* AI PANEL */}
-
-          <div className="flex-1 bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-
-            <h3 className="font-bold text-sm mb-4">
-              AI Panelists
+          {/* AI PANELISTS */}
+          <div className="flex-1 bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+            <h3 className="font-bold text-sm mb-6 border-b pb-2">
+              AI Investor Panel
             </h3>
-
             <div className="space-y-6">
-
               {INVESTOR_PERSONAS.map((p) => (
-
-                <div key={p.id}>
-
-                  <div className="flex justify-between text-xs mb-1">
-                    <span className="font-bold">{p.name}</span>
-                    <span className="text-emerald-500">{p.sentiment}</span>
+                <div key={p.id} className="group">
+                  <div className="flex justify-between text-[11px] mb-2">
+                    <span className="font-bold text-slate-700">
+                      {p.name}{" "}
+                      <span className="text-slate-400 font-normal">
+                        ({p.role})
+                      </span>
+                    </span>
+                    <span className="text-emerald-500 font-bold">
+                      {p.sentiment}
+                    </span>
                   </div>
-
-                  <div className="h-1.5 bg-slate-100 rounded-full">
-
+                  <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
                     <div
-                      className={`h-full ${p.color} rounded-full`}
+                      className={`h-full ${p.color} transition-all duration-1000`}
                       style={{ width: p.width }}
                     />
-
                   </div>
-
                 </div>
-
               ))}
-
             </div>
-
+            <button
+              onClick={handleEndSession}
+              disabled={endLoading}
+              className="w-full mt-8 bg-red-50 text-red-600 font-bold py-3 rounded-xl hover:bg-red-100 transition-colors text-sm flex items-center justify-center gap-2 disabled:opacity-70"
+            >
+              {endLoading ? (
+                <>
+                  <span className="w-4 h-4 border-2 border-red-600 border-t-transparent rounded-full animate-spin"></span>
+                  Ending Session...
+                </>
+              ) : (
+                "End Session"
+              )}
+            </button>
           </div>
-
         </div>
-
       </main>
     </div>
   );
@@ -469,22 +352,12 @@ function MetricCard({
   color: string;
 }) {
   return (
-    <div className="bg-white rounded-xl p-4 w-28 shadow-xl">
-
-      <p className="text-[9px] font-bold text-slate-400 uppercase">
-        {label}
-      </p>
-
+    <div className="bg-white/10 backdrop-blur-md border border-white/10 rounded-xl p-3 w-28">
+      <p className="text-[8px] font-bold text-white/60 uppercase">{label}</p>
       <div className="flex items-baseline gap-1">
-
-        <span className={`text-2xl font-black ${color}`}>
-          {value}
-        </span>
-
-        <span className="text-xs text-slate-300">%</span>
-
+        <span className={`text-xl font-black ${color}`}>{value}</span>
+        <span className="text-[10px] text-white/40">%</span>
       </div>
-
     </div>
   );
 }

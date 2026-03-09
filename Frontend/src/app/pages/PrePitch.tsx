@@ -51,6 +51,8 @@ import { useUser } from "../context/UserContext";
 
 export default function PrePitchSetup() {
   useTitle("Pre-Pitch Setup");
+  const [title, setTitle] = useState("None");
+  const [file, setFile] = useState<File | null>(null);
   const [mode, setMode] = useState("investor");
   const [camera, setCamera] = useState(true);
   const [mic, setMic] = useState(true);
@@ -64,34 +66,37 @@ export default function PrePitchSetup() {
 
   const { user } = useUser();
   async function handlePitchSelection(modeId: string) {
-    console.log("Selected mode:", modeId);
-    console.log("User:", user);
+    const formData = new FormData();
 
-    console.log("Investor Archetype:", investorArchetype);
+    if (file) {
+      formData.append("file", file);
+    }
+    formData.append("pitch_name", title);
+    formData.append("industry", industry);
+    formData.append("startup_type", "SaaS & Enterprise");
+    formData.append("experience_level", "First-time Founder");
+    formData.append("modeId", mode);
+    formData.append("investor_archetype", investorArchetype);
 
     localStorage.setItem("selectedMode", mode);
-    const response = await fetch(`${BaseUrl}/api/room/create`, {
+    let response = await fetch(`${BaseUrl}/api/room/create`, {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
         Authorization: `Bearer ${localStorage.getItem("token")}`,
       },
-      body: JSON.stringify({
-        user_id: user?.id ?? null,
-        industry: industry,
-        startup_type: "SaaS & Enterprise",
-        experience_level: "First-time Founder",
-        mode: mode,
-        investor_archetype: investorArchetype,
-      }),
+      body: formData,
     });
 
     const room = await response.json();
     console.log("Created room:", room);
     localStorage.setItem("roomId", room.room_id);
+    if (!response.ok) {
+      alert("Failed to create room. Please try again.");
+      return;
+    }
 
     // Redirect to pitch page
-    window.location.href = "/room/" + room.room_id;
+    window.location.href = "/room/" + room.room_id + "?pitchId=" + room.pitch_id;
   }
 
   return (
@@ -112,6 +117,19 @@ export default function PrePitchSetup() {
           <div className="lg:col-span-3 space-y-6">
             {/* MODE SELECTION */}
             <div className="relative z-10 max-w-7xl mx-auto py-12">
+              <div className="flex flex-col gap-4 mb-12">
+                <input
+                  onChange={(e) => setTitle(e.target.value)}
+                  className="border p-2 rounded"
+                  type="text"
+                  placeholder="Enter the Pitch Title"
+                />
+                <input
+                  className="border p-2 rounded"
+                  type="text"
+                  placeholder="Enter small description"
+                />
+              </div>
               <div className="mb-12">
                 <h1 className="text-4xl mb-3">Choose Your Mode</h1>
                 <p className="text-gray-400 text-lg">
@@ -185,10 +203,7 @@ export default function PrePitchSetup() {
                     Select Industry
                   </label>
 
-                  <select
-                   
-                    className="w-full mt-1 p-3 border border-gray-200 dark:border-white/10 rounded-lg bg-white dark:bg-white/5"
-                  >
+                  <select className="w-full mt-1 p-3 border border-gray-200 dark:border-white/10 rounded-lg bg-white dark:bg-white/5">
                     <option>SaaS & Enterprise</option>
                     <option>AI / ML</option>
                     <option>Fintech</option>
@@ -297,7 +312,20 @@ export default function PrePitchSetup() {
             <div className="bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl p-6">
               <h3 className="font-semibold mb-4">Resources</h3>
 
-              <div className="border-2 border-dashed border-gray-300 dark:border-white/20 rounded-xl p-10 text-center">
+              <label className="border-2 border-dashed border-gray-300 dark:border-white/20 rounded-xl p-10 text-center cursor-pointer block hover:border-gray-400 dark:hover:border-white/40 transition">
+                <input
+                  type="file"
+                  accept=".pdf,.ppt,.pptx"
+                  className="hidden"
+                  onChange={(e) => {
+                    setFile(
+                      e.target.files && e.target.files[0]
+                        ? e.target.files[0]
+                        : null,
+                    );
+                  }}
+                />
+
                 <Upload className="mx-auto mb-3 text-gray-400" />
 
                 <p className="text-sm text-gray-500 dark:text-gray-400">
@@ -305,7 +333,7 @@ export default function PrePitchSetup() {
                 </p>
 
                 <p className="text-xs text-gray-400">PDF or PPTX (Max 25MB)</p>
-              </div>
+              </label>
             </div>
           </div>
         </div>

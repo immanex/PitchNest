@@ -2,19 +2,22 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from db.database import engine
 from db.models import Base
+import os
+from fastapi.staticfiles import StaticFiles
 
 app = FastAPI(title="PitchNest Backend")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "https://pitchnest-frontend-10489410829.us-central1.run.app"
-    ],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+script_dir = os.path.dirname(__file__)
+upload_path = os.path.join(script_dir, "uploads")
+app.mount("/uploads", StaticFiles(directory=upload_path), name="uploads")
 
 # Import routes after app is created to avoid circular imports
 try:
