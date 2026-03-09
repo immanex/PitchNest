@@ -41,6 +41,6 @@ class PitchRead(BaseModel):
 
 
 class DashboardSummary(BaseModel):
-    total_pitches: int
+    total_pitches: list[PitchRead]
     average_score: float | None
     recent_pitches: list[PitchRead]

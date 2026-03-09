@@ -22,6 +22,7 @@ app.mount("/uploads", StaticFiles(directory=upload_path), name="uploads")
 # Import routes after app is created to avoid circular imports
 try:
     from api import auth, onboarding, dashboard, socket, ai_routes
+
     app.include_router(auth.router, prefix="/api")
     app.include_router(onboarding.router, prefix="/api")
     app.include_router(dashboard.router, prefix="/api")
@@ -31,6 +32,7 @@ try:
 except Exception as e:
     print(f"❌ ERROR loading routes: {e}")
     import traceback
+
     traceback.print_exc()
 
 
@@ -48,13 +50,14 @@ async def health_check():
 async def test_db():
     try:
         from db.database import engine
+
         async with engine.connect() as conn:
             result = await conn.execute("SELECT 1")
             return {"db_status": "connected", "result": result.scalar()}
     except Exception as e:
         return {"db_status": "failed", "error": str(e)}
-    
-    
+
+
 @app.on_event("startup")
 async def create_tables():
     async with engine.begin() as conn:
@@ -64,5 +67,6 @@ async def create_tables():
 if __name__ == "__main__":
     import os
     import uvicorn
+
     port = int(os.environ.get("PORT", 8080))
     uvicorn.run("main:app", host="0.0.0.0", port=port)
