@@ -4,6 +4,7 @@ pydantic_settings
 pydantic[email]
 PyJWT
 passlib
+argon2-cffi
 python-multipart
 bcrypt
 asyncpg
