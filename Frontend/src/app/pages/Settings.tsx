@@ -12,10 +12,13 @@ import {
   Save,
   Trash2,
 } from "lucide-react";
+import useTitle from "../hooks/useTitle";
+
 
 type TabType = "profile" | "account";
 
 export default function Settings() {
+  useTitle("Settings");
   const [activeTab, setActiveTab] = useState<TabType>("profile");
 
   return (

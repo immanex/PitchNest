@@ -14,6 +14,8 @@ import {
 
 import { useUser } from "../context/UserContext";
 import { usePeer } from "../context/peer";
+import useTitle from "../hooks/useTitle";
+
 
 /* ---------- AI PANEL DATA ---------- */
 
@@ -24,6 +26,7 @@ const INVESTOR_PERSONAS = [
 ];
 
 export default function LivePitchRoom() {
+  useTitle("Live Pitch Room");
   const { roomId } = useParams();
 
   const { token, user } = useUser();
@@ -76,6 +79,7 @@ export default function LivePitchRoom() {
   /* ---------- CAMERA ---------- */
 
   const handleCameraToggle = async () => {
+
     if (isVideoOn) {
       myStream?.getTracks().forEach((track) => track.stop());
       setMyStream(null);
@@ -236,6 +240,7 @@ export default function LivePitchRoom() {
   /* ---------- UI ---------- */
 
   return (
+
     <div className="h-screen flex flex-col bg-[#F8FAFC] font-sans text-slate-900">
 
       {/* HEADER */}

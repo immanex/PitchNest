@@ -1,8 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, use } from "react";
 import { Link } from "react-router-dom";
 import { Mail, Lock, Eye, EyeOff, Rocket, Moon, Sun } from "lucide-react";
+import useTitle from "../hooks/useTitle";
 
 export default function Login() {
+  useTitle("Login");
   const BaseUrl = import.meta.env.VITE_BASE_URL || "http://localhost:8000";
 
   const [showPassword, setShowPassword] = useState(false);

@@ -27,6 +27,8 @@ import {
 } from "recharts";
 
 import { useUser } from "../context/UserContext";
+import useTitle from "../hooks/useTitle";
+
 
 type Pitch = {
   id: string;
@@ -58,6 +60,7 @@ const defaultFillerWords = [
 ];
 
 export default function PostPitchAnalytics() {
+    useTitle("Pitch Details");
   const [searchParams] = useSearchParams();
   const pitchId = searchParams.get("pitch_id");
   const { token } = useUser();
