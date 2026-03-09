@@ -6,31 +6,32 @@
 
 **AI-Powered Pitch Simulation Platform for Founders**
 
-PitchNest is a real-time AI investor pitch room where founders, students, and coaches can practice pitching to a panel of AI investors. The AI agents can see, hear, and analyze the pitch — including voice delivery, video presence, and uploaded pitch decks — ask intelligent questions, reference market context, and challenge founders just like real venture capitalists.
+PitchNest is a real-time AI investor pitch room where founders, students, and coaches practice pitching their ideas to a panel of AI investors through live video and voice conversation. The platform is designed as a **video-and-audio-first experience**, where AI investors listen to the pitch, speak back with natural voice responses, and interact in a realistic investor meeting simulation.
+The AI agents can see, hear, and analyze the pitch — including voice delivery, video presence, and uploaded pitch decks — ask intelligent questions, reference market context, and challenge founders just like real venture capitalists.
+
 The platform simulates a realistic investor meeting where multiple AI panelists listen, question, debate, and evaluate startup ideas collaboratively.
 
 ---
 
 ## Features
 
-- **Live AI Pitch Room** – Real-time pitch sessions with AI investors who listen, analyze, and respond like real VCs and angels
-- **5 Investor Personas** – Aggressive VC, Friendly Angel, Analytical Investor, Technical Expert, Skeptical Investor
-- **Multimodal Interaction** – AI agents analyze voice input, pitch decks, and video to ask contextual questions
-- **Video Pitching** – Founders can pitch with live camera while AI agents observe and interact
-- **AI Vision Analysis** – AI can interpret visual cues from the video and analyze pitch deck slides during the session
-- **Pitch Deck Intelligence** – AI panelists can reference specific slides and comment on slide content during the pitch
-- **Real-Time Conversation** – WebSocket-powered interaction with AI investors during the pitch session
-- **AI Agent Coordination** – Investor agents reference each other’s comments, ask follow-up questions, and build discussion naturally
+- **Live AI Pitch Room (Voice-First)** – Real-time pitch sessions where founders speak to AI investors and receive spoken responses in a natural conversation format
+- **Video-First Pitching** – Founders pitch with live camera while AI agents observe delivery, engagement, and presentation style
+- **Multiple Investor Personas** – Aggressive VC, Friendly Angel, Analytical Investor, Technical Expert, Skeptical Investor, etc.
+- **Multimodal Interaction** – AI agents analyze voice delivery, video presence, and pitch deck slides to ask contextual questions
+- **Pitch Deck Intelligence** – AI panelists can view slides during the pitch and reference specific slide content when asking questions
+- **Real-Time Voice Conversation** – AI investors respond using generated voice responses rather than text, creating a realistic meeting environment
+- **AI Agent Coordination** – Investor agents listen to each other, reference previous comments, and build natural follow-up questions
 - **AI Panel Deliberation** – After the pitch, AI investors discuss the startup among themselves and deliver a panel verdict
-- **Live Transcript** – Real-time transcription captures both the founder’s pitch and AI panel responses
-- **Real-Time Voice Output** – AI responses spoken via browser SpeechSynthesis (toggle on/off)
-- **Real-Time Pitch Metrics** – Live feedback including confidence meter, clarity score, communication score, and market understanding indicators
-- **AI Pitch Evaluation** – Final scoring for clarity, communication, and market fit with structured panel feedback
+- **Live Transcript (Secondary Interface)** – Real-time transcription captures the conversation between founder and AI investors for review and analytics
+- **Real-Time Pitch Metrics** – Live feedback including confidence meter, clarity score, communication score, and delivery analysis
+- **AI Vision Analysis** – AI can interpret visual cues from the video and analyze pitch deck slides during the session
+- **AI Pitch Evaluation** – Final scoring for clarity, communication, delivery, and market fit with structured panel feedback
 - **Post-Pitch Analytics** – Detailed insights on strengths, weaknesses, and suggested improvements
-- **Session Replay** – Replay pitch sessions with transcript and AI feedback for review
+- **Session Replay** – Replay pitch sessions with transcript and AI feedback
 - **User Auth** – Sign up, login, email verification, password reset
 - **Profile Setup** – Founder/startup profiles and AI panel preference configuration
-- **WebSocket Chat** – Real-time conversation infrastructure powering the live AI pitch room
+- **Real-Time Audio Interaction** – Low-latency voice communication enabling natural conversation with AI investors
   
 ---
 
