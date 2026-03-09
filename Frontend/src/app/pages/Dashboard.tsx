@@ -13,6 +13,8 @@ import {
 import { useUser } from "../context/UserContext";
 import { useEffect, useState } from "react";
 import PrePitchSetup from "../pages/PrePitch";
+import useTitle from "../hooks/useTitle";
+
 
 
 
@@ -21,6 +23,7 @@ interface Pitch {
   title: string;
   date: string;
   score: number;
+  created_at: string;
 }
 
 const aiRecommendations = [
@@ -42,6 +45,7 @@ const aiRecommendations = [
 ];
 
 export default function Dashboard() {
+  useTitle("Dashboard");
    const BaseUrl = import.meta.env.VITE_BASE_URL || "http://localhost:8000";
   const { user, rooms } = useUser();
 
@@ -144,7 +148,7 @@ export default function Dashboard() {
                         </div>
 
                         <div className="text-xs text-gray-500 dark:text-gray-400">
-                          {pitch?.date || "Unknown"}
+                          {pitch?.created_at || "Unknown"}
                         </div>
                       </div>
 

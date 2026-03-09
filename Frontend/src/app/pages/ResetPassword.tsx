@@ -2,8 +2,11 @@ import { useState } from 'react';
 import { Link } from 'react-router';
 import { motion } from 'motion/react';
 import { Sparkles, Lock, Eye, EyeOff } from 'lucide-react';
+import useTitle from "../hooks/useTitle";
+
 
 export default function ResetPassword() {
+  useTitle("Reset Password");
   const [showPassword, setShowPassword] = useState(false);
 
   return (

@@ -17,6 +17,7 @@ import {
   Sun,
   ChevronLeft,
 } from "lucide-react";
+import useTitle from "../hooks/useTitle";
 
 import { Link, useLocation } from "react-router-dom";
 const INVESTOR_PERSONALITIES = [
@@ -49,6 +50,7 @@ const INVESTOR_PERSONALITIES = [
 import { useUser } from "../context/UserContext";
 
 export default function PrePitchSetup() {
+  useTitle("Pre-Pitch Setup");
   const [mode, setMode] = useState("investor");
   const [camera, setCamera] = useState(true);
   const [mic, setMic] = useState(true);

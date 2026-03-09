@@ -6,6 +6,8 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { Link } from "react-router-dom";
+import useTitle from "../hooks/useTitle";
+
 
 const pitches = [
   {
@@ -47,6 +49,7 @@ const pitches = [
 ];
 
 export default function MyPitches() {
+  useTitle("My Pitches");
   return (
     <div className="p-8 bg-gray-100 dark:bg-[#0D1117] min-h-screen">
       {/* STATS */}

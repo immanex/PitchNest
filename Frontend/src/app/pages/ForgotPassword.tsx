@@ -1,8 +1,10 @@
 import { Link } from 'react-router';
 import { motion } from 'motion/react';
 import { Sparkles, Mail, ArrowLeft } from 'lucide-react';
+import useTitle from "../hooks/useTitle";
 
 export default function ForgotPassword() {
+  useTitle("Forgot Password");
   return (
     <div className="min-h-screen bg-[#0D1117] text-white flex items-center justify-center px-6">
       {/* Background Effects */}

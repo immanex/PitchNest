@@ -4,8 +4,10 @@ import {
   Calendar,
   TrendingUp,
 } from "lucide-react";
+import useTitle from "../hooks/useTitle";
 
 export default function PostPitchAnalytics() {
+  useTitle("Analytics");
   return (
     <div className="p-8 bg-gray-100 dark:bg-[#0D1117] min-h-screen">
 

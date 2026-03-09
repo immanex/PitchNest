@@ -14,9 +14,11 @@ import {
   Phone,
   HelpCircle,
 } from "lucide-react";
+import useTitle from "../hooks/useTitle";
 
 import { useUser } from "../context/UserContext";
 export default function Landing() {
+  useTitle("Home");
   const { user } = useUser();
   const scrollToSection = (id: string) => {
     const element = document.getElementById(id);

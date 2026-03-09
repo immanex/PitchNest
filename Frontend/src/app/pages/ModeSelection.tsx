@@ -4,6 +4,8 @@ import { motion } from "motion/react";
 import { Users, Dumbbell, Zap, ArrowRight, ChevronLeft } from "lucide-react";
 import { useUser } from "../context/UserContext";
 import { useLocation } from "react-router-dom";
+import useTitle from "../hooks/useTitle";
+
 
 const INVESTOR_PERSONALITIES = [
   { id: "aggressive", name: "Aggressive VC", desc: "Tough, challenges burn rate & competition" },
@@ -44,6 +46,7 @@ const modes = [
 ];
 
 export default function ModeSelection() {
+    useTitle("Select Mode");
   const location = useLocation();
   const [investorArchetype, setInvestorArchetype] = useState<string>("friendly");
 
