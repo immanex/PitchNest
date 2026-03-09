@@ -20,9 +20,9 @@ import useTitle from "../hooks/useTitle";
 
 interface Pitch {
   id: number;
-  title: string;
+  pitch_name: string;
   date: string;
-  score: number;
+  overall_score: number;
   created_at: string;
 }
 
@@ -144,7 +144,7 @@ export default function Dashboard() {
                     >
                       <div>
                         <div className="font-medium">
-                          {pitch?.title || "None"}
+                          {pitch?.pitch_name || "None"}
                         </div>
 
                         <div className="text-xs text-gray-500 dark:text-gray-400">
@@ -154,7 +154,7 @@ export default function Dashboard() {
 
                       <div className="flex items-center gap-4">
                         <div className="text-green-500 font-semibold">
-                          {pitch?.score || "N/A"}
+                          {pitch?.overall_score || "N/A"}
                         </div>
 
                         <Link to={`/pitch-detail?pitch_id=${pitch.id}`}>

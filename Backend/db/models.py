@@ -112,6 +112,8 @@ class Pitch(Base):
     __tablename__ = "pitches"
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=generate_uuid)
+    pitch_name : Mapped[str | None] = mapped_column(String, nullable=True)
+    
 
     user_id: Mapped[str] = mapped_column(
         String, ForeignKey("users.id", ondelete="CASCADE")
@@ -120,6 +122,7 @@ class Pitch(Base):
     startup_id: Mapped[str | None] = mapped_column(
         String, ForeignKey("startup_profiles.id", ondelete="SET NULL"), nullable=True
     )
+    pitch_pdf_url: Mapped[str | None] = mapped_column(String, nullable=True)
 
     # 👇 NEW FIELDS FROM FRONTEND
     industry: Mapped[str | None] = mapped_column(String, nullable=True)
@@ -140,8 +143,7 @@ class Pitch(Base):
     feedback_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc)
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
 
     user: Mapped["User"] = relationship(back_populates="pitches")
@@ -201,8 +203,7 @@ class ChatMessage(Base):
         String, ForeignKey("rooms.id", ondelete="CASCADE")
     )
     user_id: Mapped[str | None] = mapped_column(
-        String, ForeignKey("users.id", ondelete="CASCADE"),
-        nullable=True
+        String, ForeignKey("users.id", ondelete="CASCADE"), nullable=True
     )
     content: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(

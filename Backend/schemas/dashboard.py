@@ -1,6 +1,7 @@
 from pydantic import BaseModel
 from datetime import datetime
 
+
 class AIRecommendationRead(BaseModel):
     id: str
     category: str
@@ -9,13 +10,19 @@ class AIRecommendationRead(BaseModel):
     class Config:
         from_attributes = True
 
+
 class PitchCreate(BaseModel):
+    pitch_name: str | None = None
+    pitch_pdf_url: str | None = None
     startup_id: str | None = None
     mode: str = "Practice"
     investor_archetype: str | None = None
 
+
 class PitchRead(BaseModel):
     id: str
+    pitch_name: str | None
+    pitch_pdf_url: str | None = None
     startup_id: str | None
     mode: str
     investor_archetype: str | None
@@ -26,13 +33,14 @@ class PitchRead(BaseModel):
     verdict: str | None
     feedback_summary: str | None
     created_at: datetime
-    
+
     recommendations: list[AIRecommendationRead] = []
 
     class Config:
         from_attributes = True
 
+
 class DashboardSummary(BaseModel):
-    total_pitches: int
+    total_pitches: list[PitchRead]
     average_score: float | None
     recent_pitches: list[PitchRead]

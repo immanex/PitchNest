@@ -1,4 +1,13 @@
-from fastapi import WebSocket, WebSocketDisconnect, APIRouter, Depends
+from fastapi import (
+    WebSocket,
+    WebSocketDisconnect,
+    APIRouter,
+    Depends,
+    UploadFile,
+    File,
+    Form,
+)
+
 from typing import Dict, List, Annotated
 import uuid
 import json
@@ -13,6 +22,12 @@ from api.deps import get_current_active_user, get_current_user, get_user_from_to
 from schemas.socket import RoomCreate
 from db.models import User, ChatMessage
 from ai.gemini import generate_gemini_response, evaluate_pitch_with_gemini
+from google.cloud import storage
+import os
+
+UPLOAD_DIR = "uploads"
+
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 
 router = APIRouter(prefix="/room", tags=["room"])
@@ -69,7 +84,9 @@ class ConnectionManager:
                 del self.rooms[room_id]
         print(f"❌ {email or 'unknown'} disconnected from room: {room_id}")
 
-    async def broadcast(self, message: str, room_id: str, exclude_ws: WebSocket | None = None):
+    async def broadcast(
+        self, message: str, room_id: str, exclude_ws: WebSocket | None = None
+    ):
         """Send a message to everyone in the room. Iterate over a copy to avoid modification during send."""
         room = self.rooms.get(room_id, {})
         connections = list(room.values())
@@ -99,23 +116,39 @@ async def test():
 ## room creation endpoint
 @router.post("/create")
 async def create_room(
-    room_data: dict,
-    current_user: Annotated[User, Depends(get_current_active_user)],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    pitch_name: str = Form(...),
+    industry: str = Form(...),
+    startup_type: str = Form(...),
+    experience_level: str = Form(...),
+    modeId: str = Form(...),
+    investor_archetype: str = Form(...),
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
 ):
 
     room_id = current_user.id + "-" + str(uuid.uuid4())[:8]
 
+    file_path = os.path.join(UPLOAD_DIR, file.filename)
+
+    with open(file_path, "wb") as buffer:
+        contents = await file.read()
+        buffer.write(contents)
+
+    print("Saved file at:", file_path)
+
     room = Room(id=room_id, owner_id=current_user.id)
 
     pitch = Pitch(
+        pitch_name=pitch_name,
+        pitch_pdf_url=file_path,
         user_id=current_user.id,
         room_id=room_id,
-        industry=room_data.get("industry"),
-        startup_type=room_data.get("startup_type"),
-        experience_level=room_data.get("experience_level"),
-        mode=room_data.get("modeId", "Practice"),
-        investor_archetype=room_data.get("investor_archetype"),
+        industry=industry,
+        startup_type=startup_type,
+        experience_level=experience_level,
+        mode=modeId,
+        investor_archetype=investor_archetype,
     )
 
     db.add(room)
@@ -123,7 +156,7 @@ async def create_room(
 
     await db.commit()
 
-    return {"room_id": room_id}
+    return {"room_id": room_id , "pitch_id":pitch.id}
 
 
 @router.put("/end/{room_id}")
@@ -166,9 +199,7 @@ async def end_session(
         transcript = "\n\n".join(transcript_parts) or "(No transcript)"
 
         # Run AI evaluation
-        eval_result = await asyncio.to_thread(
-            evaluate_pitch_with_gemini, transcript
-        )
+        eval_result = await asyncio.to_thread(evaluate_pitch_with_gemini, transcript)
 
         # Update pitch with scores and feedback
         pitch.overall_score = eval_result["overall_score"]
@@ -184,13 +215,16 @@ async def end_session(
         for w in eval_result.get("weaknesses", []):
             db.add(AIRecommendation(pitch_id=pitch.id, category="weakness", content=w))
         for s in eval_result.get("suggestions", []):
-            db.add(AIRecommendation(pitch_id=pitch.id, category="suggestion", content=s))
+            db.add(
+                AIRecommendation(pitch_id=pitch.id, category="suggestion", content=s)
+            )
 
     # Delete room (cascades to ChatMessages)
     await db.delete(room)
     await db.commit()
 
     return {
+        "success":True,
         "message": "Session ended successfully",
         "pitch_id": pitch_id,
     }
