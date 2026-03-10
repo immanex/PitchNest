@@ -56,8 +56,13 @@ async def get_dashboard_summary(
     db: AsyncSession = Depends(get_db),
 ):
     # 1. Total Pitches
-    count_query = select(func.count(Pitch.id)).where(Pitch.user_id == current_user.id)
-    total_pitches = (await db.execute(count_query)).scalar() or 0
+    query = (
+        select(Pitch)
+        .options(selectinload(Pitch.recommendations))
+        .where(Pitch.user_id == current_user.id)
+        .order_by(desc(Pitch.created_at))
+    )
+    total_pitches = (await db.execute(query)).scalars().all()
 
     # 2. Average Overall Score
     avg_query = select(func.avg(Pitch.overall_score)).where(
@@ -76,7 +81,7 @@ async def get_dashboard_summary(
     recent_pitches = (await db.execute(recent_query)).scalars().all()
 
     return DashboardSummary(
-        total_pitches=total_pitches,
+        total_pitches=list(total_pitches),
         average_score=avg_score,
         recent_pitches=list(recent_pitches),
     )
