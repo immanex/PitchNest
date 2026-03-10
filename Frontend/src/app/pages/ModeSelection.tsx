@@ -54,7 +54,8 @@ export default function ModeSelection() {
   const { user } = useUser();
   async function handlePitchSelection(modeId: string) {
     localStorage.setItem("selectedMode", modeId);
-    let room = await fetch("http://localhost:8000/api/room/create", {
+    const BaseUrl = import.meta.env.VITE_BASE_URL || "http://localhost:8000";
+    let room = await fetch(`${BaseUrl}/api/room/create`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

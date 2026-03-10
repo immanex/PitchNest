@@ -395,7 +395,6 @@ async def websocket_room(
                 with ThreadPoolExecutor(max_workers=1) as ex:
                     ex.submit(_produce_chunks)
                     while True:
-                        print("Working.....")
                         chunk = await chunk_queue.get()
                         if chunk is None:
                             break
@@ -409,8 +408,7 @@ async def websocket_room(
                                 }
                             ),
                             room_id,
-                        )
-                    print("Done")  
+                        )  
 
                 ai_response = (
                     "".join(ai_response_parts).strip()

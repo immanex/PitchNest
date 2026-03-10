@@ -782,13 +782,17 @@ export default function LivePitchRoom() {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
-      if (res.ok) {
-        window.location.href = `/analytics?pitch_id=${data.pitch_id}`;
+      if (res.ok && data.pitch_id) {
+        window.location.href = `/pitch-detail?pitch_id=${data.pitch_id}`;
+      } else if (res.ok) {
+        window.location.href = "/dashboard";
       } else {
         console.error("End session failed:", data);
+        alert("Failed to end session. Please try again.");
       }
     } catch (err) {
       console.error("End session error:", err);
+      alert("Failed to end session. Please try again.");
     }
   }
 
