@@ -14,5 +14,5 @@ python-jose
 groq
 google-generativeai
 google-cloud-storage
-argon2
+argon2-cffi
 
