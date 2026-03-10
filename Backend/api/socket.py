@@ -12,6 +12,7 @@ from typing import Dict, List, Annotated
 import uuid
 import json
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
@@ -21,7 +22,7 @@ from db.models import Pitch, User, Room, AIRecommendation
 from api.deps import get_current_active_user, get_current_user, get_user_from_token
 from schemas.socket import RoomCreate
 from db.models import User, ChatMessage
-from ai.gemini import generate_gemini_response, evaluate_pitch_with_gemini
+from ai.gemini import generate_gemini_response_stream, evaluate_pitch_with_gemini
 from google.cloud import storage
 import os
 
@@ -359,13 +360,39 @@ async def websocket_room(
                         for c in prev_chats
                     ]
 
-                # generate AI response (with investor personality + dynamic questioning)
-                ai_response = await asyncio.to_thread(
-                    generate_gemini_response,
-                    user_message.content,
-                    investor_archetype,
-                    conversation_history,
-                )
+                # Stream AI response for faster perceived latency (producer in thread)
+                loop = asyncio.get_event_loop()
+                chunk_queue = asyncio.Queue()
+                ai_response_parts = []
+
+                def _produce_chunks():
+                    for chunk in generate_gemini_response_stream(
+                        user_message.content,
+                        investor_archetype,
+                        conversation_history,
+                    ):
+                        loop.call_soon_threadsafe(chunk_queue.put_nowait, chunk)
+                    loop.call_soon_threadsafe(chunk_queue.put_nowait, None)
+
+                with ThreadPoolExecutor(max_workers=1) as ex:
+                    ex.submit(_produce_chunks)
+                    while True:
+                        chunk = await chunk_queue.get()
+                        if chunk is None:
+                            break
+                        ai_response_parts.append(chunk)
+                        await manager.broadcast(
+                            json.dumps(
+                                {
+                                    "action": "ai-response-chunk",
+                                    "speaker": "AI Judge",
+                                    "chunk": chunk,
+                                }
+                            ),
+                            room_id,
+                        )
+
+                ai_response = "".join(ai_response_parts).strip() or "I'd like to hear more about your pitch."
 
                 # save AI message
                 async with AsyncSessionLocal() as db:
@@ -379,7 +406,7 @@ async def websocket_room(
                     await db.commit()
                     await db.refresh(ai_message)
 
-                # broadcast AI message
+                # broadcast final AI message (for transcript, TTS, etc.)
                 await manager.broadcast(
                     json.dumps(
                         {
