@@ -366,13 +366,22 @@ async def websocket_room(
                 ai_response_parts = []
 
                 def _produce_chunks():
-                    for chunk in generate_gemini_response_stream(
-                        user_message.content,
-                        investor_archetype,
-                        conversation_history,
-                    ):
-                        loop.call_soon_threadsafe(chunk_queue.put_nowait, chunk)
-                    loop.call_soon_threadsafe(chunk_queue.put_nowait, None)
+                    try:
+                        for chunk in generate_gemini_response_stream(
+                            user_message.content,
+                            investor_archetype,
+                            conversation_history,
+                        ):
+                            loop.call_soon_threadsafe(chunk_queue.put_nowait, chunk)
+                    except Exception:
+                        # Ensure the consumer doesn't hang if the producer fails mid-stream.
+                        loop.call_soon_threadsafe(
+                            chunk_queue.put_nowait,
+                            "\n[AI error: failed to stream response. Please try again.]",
+                        )
+                    finally:
+                        # Sentinel: always signal completion to unblock the consumer loop.
+                        loop.call_soon_threadsafe(chunk_queue.put_nowait, None)
 
                 with ThreadPoolExecutor(max_workers=1) as ex:
                     ex.submit(_produce_chunks)
