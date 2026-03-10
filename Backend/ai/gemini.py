@@ -81,6 +81,43 @@ def generate_gemini_response(
     return "AI is not configured. Add GEMINI_API_KEY to .env"
 
 
+def generate_gemini_response_stream(
+    text: str,
+    investor_archetype: str | None = None,
+    conversation_history: list[dict[str, str]] | None = None,
+):
+    """
+    Stream VC-style AI response for live pitch chat.
+    Yields text chunks for real-time display. Much faster perceived latency.
+    """
+    persona = _get_persona_prompt(investor_archetype)
+    system = (
+        "You are an experienced venture capitalist judging startup pitches. "
+        f"{persona} "
+        "Respond concisely (2-4 sentences). Ask one focused question or give one pointed feedback. "
+        "Adapt your questions based on what the founder has already shared (dynamic questioning)."
+    )
+
+    if not _gemini_chat:
+        yield "AI is not configured. Add GEMINI_API_KEY to .env"
+        return
+
+    history = []
+    if conversation_history:
+        for msg in conversation_history[-10:]:
+            role = "user" if msg.get("speaker") != "AI Judge" else "model"
+            history.append({"role": role, "parts": [msg.get("content", "")]})
+    chat = _gemini_chat.start_chat(history=history)
+
+    full_text = []
+    for chunk in chat.send_message(
+        f"{system}\n\nUser message: {text}", stream=True
+    ):
+        if chunk.text:
+            full_text.append(chunk.text)
+            yield chunk.text
+
+
 def evaluate_pitch_with_gemini(transcript: str) -> dict[str, Any]:
     """
     Full pitch evaluation using gemini-1.5-pro.

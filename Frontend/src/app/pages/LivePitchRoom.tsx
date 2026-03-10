@@ -138,6 +138,13 @@ export default function LivePitchRoom() {
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [chatMessage, setChatMessage] = useState("");
   const [unreadCount, setUnreadCount] = useState(0);
+  const [streamingMessage, setStreamingMessage] = useState<string | null>(null);
+  const [isVoiceOn, setIsVoiceOn] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+
+  const speechSynthesisRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const recognitionRef = useRef<any>(null);
+  const handleChatRef = useRef<(text?: string) => void>(() => {});
   const [connectionStatus, setConnectionStatus] = useState<
     "connecting" | "connected" | "disconnected"
   >("connecting");
@@ -389,18 +396,33 @@ export default function LivePitchRoom() {
           setUsers((prev) => [...new Set([...(prev || []), data.email])]);
         }
 
+        if (data.action === "ai-response-chunk") {
+          setStreamingMessage((prev) => (prev || "") + (data.chunk || ""));
+        }
+
         if (data.action === "send-message") {
+          setStreamingMessage(null);
+          const text = data.text || data.content;
           setTranscript((prev) => [
             ...prev,
             {
               speaker: data.speaker || "Unknown",
-              text: data.text || data.content,
+              text,
               time: new Date().toLocaleTimeString([], {
                 hour: "2-digit",
                 minute: "2-digit",
               }),
             },
           ]);
+          // TTS: speak AI response when voice is on
+          if (isVoiceOn && data.speaker === "AI Judge" && text && "speechSynthesis" in window) {
+            window.speechSynthesis.cancel();
+            const u = new SpeechSynthesisUtterance(text);
+            u.rate = 0.95;
+            u.pitch = 1;
+            speechSynthesisRef.current = u;
+            window.speechSynthesis.speak(u);
+          }
         }
 
         if (data.action === "incoming-call") {
@@ -468,7 +490,7 @@ export default function LivePitchRoom() {
       } catch {}
       socketRef.current = null;
     };
-  }, [roomId, token, createAnswer, setRemoteAnswer, peer]);
+  }, [roomId, token, createAnswer, setRemoteAnswer, peer, isVoiceOn]);
 
   // ─── Fetch chat history ───
   useEffect(() => {
@@ -528,19 +550,69 @@ export default function LivePitchRoom() {
   }
 
   // ─── Chat send ───
-  function handleChat() {
-    if (!chatMessage.trim() || !socketRef.current) return;
+  const handleChat = useCallback((text?: string) => {
+    const msg = (text ?? chatMessage).trim();
+    if (!msg || !socketRef.current) return;
     socketRef.current.send(
       JSON.stringify({
         action: "send-message",
         roomId,
         user_id: user?.id,
-        text: chatMessage,
+        text: msg,
         speaker: user?.full_name || user?.email || "You",
       })
     );
     setChatMessage("");
-  }
+  }, [roomId, user?.id, user?.full_name, user?.email, chatMessage]);
+
+  useEffect(() => {
+    handleChatRef.current = handleChat;
+  }, [handleChat]);
+
+  // ─── Voice input (STT) ───
+  const toggleVoiceInput = useCallback(() => {
+    const SpeechRecognition =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      console.warn("Speech recognition not supported in this browser");
+      return;
+    }
+    if (isListening && recognitionRef.current) {
+      recognitionRef.current.stop();
+      recognitionRef.current = null;
+      setIsListening(false);
+      return;
+    }
+    const recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = "en-US";
+    recognition.onresult = (e: any) => {
+      const last = e.results[e.results.length - 1];
+      if (last?.isFinal) {
+        const t = last[0]?.transcript?.trim();
+        if (t) handleChatRef.current?.(t);
+      }
+    };
+    recognition.onend = () => {
+      recognitionRef.current = null;
+      setIsListening(false);
+    };
+    recognition.onerror = () => {
+      recognitionRef.current = null;
+      setIsListening(false);
+    };
+    recognitionRef.current = recognition;
+    recognition.start();
+    setIsListening(true);
+  }, [isListening]);
+
+  // Cancel TTS when user sends a message (interruption)
+  useEffect(() => {
+    if (chatMessage && "speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+    }
+  }, [chatMessage]);
 
   const overallScore = Math.round(
     (scores.clarity + scores.confidence + scores.marketFit) / 3
@@ -796,22 +868,35 @@ export default function LivePitchRoom() {
               </span>
             </div>
             <div className="overflow-auto px-4 py-2 space-y-1.5" style={{ height: "90px" }}>
-              {transcript.length === 0 ? (
+              {transcript.length === 0 && !streamingMessage ? (
                 <p className="text-white/20 text-xs italic">Waiting for messages…</p>
               ) : (
-                transcript.map((msg, i) => (
-                  <div key={i} className="flex items-start gap-2 text-sm chat-bubble">
-                    <span className="text-violet-400 font-600 text-xs whitespace-nowrap mt-0.5">
-                      {msg.speaker}
-                    </span>
-                    <span className="text-white/70 text-xs flex-1">{msg.text}</span>
-                    {msg.time && (
-                      <span className="text-white/20 text-[10px] shrink-0 mt-0.5">
-                        {msg.time}
+                <>
+                  {transcript.map((msg, i) => (
+                    <div key={i} className="flex items-start gap-2 text-sm chat-bubble">
+                      <span className="text-violet-400 font-600 text-xs whitespace-nowrap mt-0.5">
+                        {msg.speaker}
                       </span>
-                    )}
-                  </div>
-                ))
+                      <span className="text-white/70 text-xs flex-1">{msg.text}</span>
+                      {msg.time && (
+                        <span className="text-white/20 text-[10px] shrink-0 mt-0.5">
+                          {msg.time}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                  {streamingMessage && (
+                    <div className="flex items-start gap-2 text-sm chat-bubble">
+                      <span className="text-violet-400 font-600 text-xs whitespace-nowrap mt-0.5">
+                        AI Judge
+                      </span>
+                      <span className="text-white/70 text-xs flex-1">
+                        {streamingMessage}
+                        <span className="inline-block w-2 h-3 ml-0.5 bg-violet-400/60 animate-pulse" />
+                      </span>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </div>
@@ -857,7 +942,7 @@ export default function LivePitchRoom() {
 
           {/* Controls */}
           <div className="glass-heavy rounded-2xl p-3">
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-5 gap-2">
               <button
                 onClick={handleCameraToggle}
                 className={`btn-control flex flex-col items-center gap-1 py-2.5 rounded-xl text-[10px] font-500 transition-all ${
@@ -896,6 +981,19 @@ export default function LivePitchRoom() {
                   <ScreenShare size={15} />
                 )}
                 Screen
+              </button>
+
+              <button
+                onClick={() => setIsVoiceOn((v) => !v)}
+                className={`btn-control flex flex-col items-center gap-1 py-2.5 rounded-xl text-[10px] font-500 transition-all ${
+                  isVoiceOn
+                    ? "bg-violet-500/20 text-violet-400 border border-violet-500/30"
+                    : "bg-white/8 text-white hover:bg-white/12"
+                }`}
+                title={isVoiceOn ? "AI voice on" : "AI voice off - click to hear AI speak"}
+              >
+                {isVoiceOn ? <Volume2 size={15} /> : <VolumeX size={15} />}
+                Voice
               </button>
 
               <button
@@ -1121,17 +1219,28 @@ export default function LivePitchRoom() {
         </div>
 
         <div className="flex items-center gap-2">
+          <button
+            onClick={toggleVoiceInput}
+            className={`btn-control p-2 rounded-xl transition-colors ${
+              isListening
+                ? "bg-red-500/30 text-red-400 border border-red-500/50 animate-pulse"
+                : "bg-white/8 text-white hover:bg-white/12"
+            }`}
+            title={isListening ? "Click to stop listening" : "Click to speak (voice input)"}
+          >
+            <Mic size={18} />
+          </button>
           <input
             value={chatMessage}
             onChange={(e) => setChatMessage(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") handleChat();
             }}
-            placeholder="Send a note to room…"
-            className="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-sm text-white placeholder:text-white/25 focus:outline-none focus:border-violet-500/50 w-60 transition-colors"
+            placeholder="Type or hold mic to speak…"
+            className="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-sm text-white placeholder:text-white/25 focus:outline-none focus:border-violet-500/50 w-56 transition-colors"
           />
           <button
-            onClick={handleChat}
+            onClick={() => handleChat()}
             className="btn-control px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-sm flex items-center gap-2 transition-colors"
           >
             <Send size={13} />
@@ -1162,32 +1271,58 @@ export default function LivePitchRoom() {
           </div>
 
           <div className="flex-1 overflow-auto px-4 py-3 space-y-2">
-            {transcript.length === 0 ? (
+            {transcript.length === 0 && !streamingMessage ? (
               <div className="flex flex-col items-center justify-center h-32 gap-2 text-white/20">
                 <MessageSquare size={24} className="opacity-40" />
                 <p className="text-xs">No messages yet</p>
               </div>
             ) : (
-              transcript.map((m, idx) => (
-                <div key={idx} className="chat-bubble">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-[11px] font-600 text-violet-400">
-                      {m.speaker}
-                    </span>
-                    {m.time && (
-                      <span className="text-[10px] text-white/20">{m.time}</span>
-                    )}
+              <>
+                {transcript.map((m, idx) => (
+                  <div key={idx} className="chat-bubble">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[11px] font-600 text-violet-400">
+                        {m.speaker}
+                      </span>
+                      {m.time && (
+                        <span className="text-[10px] text-white/20">{m.time}</span>
+                      )}
+                    </div>
+                    <div className="p-2.5 bg-white/4 rounded-xl border border-white/5 text-xs text-white/70 leading-relaxed">
+                      {m.text}
+                    </div>
                   </div>
-                  <div className="p-2.5 bg-white/4 rounded-xl border border-white/5 text-xs text-white/70 leading-relaxed">
-                    {m.text}
+                ))}
+                {streamingMessage && (
+                  <div className="chat-bubble">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[11px] font-600 text-violet-400">
+                        AI Judge
+                      </span>
+                    </div>
+                    <div className="p-2.5 bg-white/4 rounded-xl border border-violet-500/20 text-xs text-white/70 leading-relaxed">
+                      {streamingMessage}
+                      <span className="inline-block w-2 h-3 ml-0.5 bg-violet-400/60 animate-pulse" />
+                    </div>
                   </div>
-                </div>
-              ))
+                )}
+              </>
             )}
             <div ref={chatEndRef} />
           </div>
 
           <div className="p-3 border-t border-white/6 flex gap-2">
+            <button
+              onClick={toggleVoiceInput}
+              className={`btn-control p-2.5 rounded-xl transition-colors shrink-0 ${
+                isListening
+                  ? "bg-red-500/30 text-red-400 border border-red-500/50"
+                  : "bg-white/8 text-white hover:bg-white/12"
+              }`}
+              title={isListening ? "Stop listening" : "Voice input"}
+            >
+              <Mic size={14} />
+            </button>
             <input
               value={chatMessage}
               onChange={(e) => setChatMessage(e.target.value)}
@@ -1195,10 +1330,10 @@ export default function LivePitchRoom() {
                 if (e.key === "Enter") handleChat();
               }}
               className="flex-1 px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl text-sm text-white placeholder:text-white/25 focus:outline-none focus:border-violet-500/50 transition-colors"
-              placeholder="Type a note…"
+              placeholder="Type or click mic to speak…"
             />
             <button
-              onClick={handleChat}
+              onClick={() => handleChat()}
               className="btn-control px-3 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white transition-colors"
             >
               <Send size={14} />
