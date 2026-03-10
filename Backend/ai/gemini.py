@@ -3,6 +3,7 @@ AI module using Google Gemini for PitchNest.
 - gemini-1.5-flash: Real-time live chat (fast, low latency)
 - gemini-1.5-pro: Pitch evaluation, summary, structured feedback (better reasoning)
 """
+
 import json
 import re
 from typing import Any
@@ -50,6 +51,40 @@ def _get_persona_prompt(investor_archetype: str | None) -> str:
     return INVESTOR_PERSONAS.get(key, INVESTOR_PERSONAS["friendly"])
 
 
+def build_system_prompt(persona: str, deck_context: str = "") -> str:
+    pitch_context_block = ""
+    if deck_context:
+        pitch_context_block = f"""
+## PITCH DECK CONTEXT
+You have been given the founder's pitch deck. Use this as your knowledge base.
+Reference specific slides, data points, or claims when asking questions.
+Do NOT re-read it aloud — treat it as private briefing material only you have seen.
+
+--- PITCH DECK CONTENT START ---
+{deck_context}
+--- PITCH DECK CONTENT END ---
+
+When questioning the founder:
+- Reference specific slide content naturally (e.g. "Your deck mentions $2M ARR...")
+- Challenge numbers or assumptions you spotted in the deck
+- Ask about things that are MISSING from the deck
+- Point out inconsistencies between what they say vs what the deck shows
+"""
+
+    return (
+        "You are an experienced venture capitalist judging a live startup pitch.\n"
+        f"{persona}\n"
+        f"{pitch_context_block}\n"
+        "## RESPONSE RULES\n"
+        "- Respond in 2-4 sentences MAX. Be sharp, not verbose.\n"
+        "- Ask ONE focused question OR give ONE pointed piece of feedback per turn.\n"
+        "- Never ask generic questions — always tie to something specific the founder said or the deck shows.\n"
+        "- If the founder contradicts their deck, call it out directly.\n"
+        "- Adapt dynamically — don't repeat topics already covered in conversation history.\n"
+        "- Stay in character as your investor persona at all times.\n"
+    )
+
+
 def generate_gemini_response(
     text: str,
     investor_archetype: str | None = None,
@@ -83,20 +118,11 @@ def generate_gemini_response(
 
 def generate_gemini_response_stream(
     text: str,
-    investor_archetype: str | None = None,
+    system_prompt: str,
     conversation_history: list[dict[str, str]] | None = None,
 ):
-    """
-    Stream VC-style AI response for live pitch chat.
-    Yields text chunks for real-time display. Much faster perceived latency.
-    """
-    persona = _get_persona_prompt(investor_archetype)
-    system = (
-        "You are an experienced venture capitalist judging startup pitches. "
-        f"{persona} "
-        "Respond concisely (2-4 sentences). Ask one focused question or give one pointed feedback. "
-        "Adapt your questions based on what the founder has already shared (dynamic questioning)."
-    )
+
+    # Build pitch deck context block
 
     if not _gemini_chat:
         yield "AI is not configured. Add GEMINI_API_KEY to .env"
@@ -111,7 +137,7 @@ def generate_gemini_response_stream(
 
     full_text = []
     for chunk in chat.send_message(
-        f"{system}\n\nUser message: {text}", stream=True
+        f"{system_prompt}\n\nUser message: {text}", stream=True
     ):
         if chunk.text:
             full_text.append(chunk.text)

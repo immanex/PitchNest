@@ -30,6 +30,7 @@ import {
   ScreenShare,
   ScreenShareOff,
   Settings,
+  FileText,
 } from "lucide-react";
 
 import { useUser } from "../context/UserContext";
@@ -99,14 +100,21 @@ export default function LivePitchRoom() {
 
   const BaseUrl = import.meta.env.VITE_BASE_URL || "http://localhost:8000";
 
-  const localVideoRef = useRef<HTMLVideoElement | null>(null);
   const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
-
   const [users, setUsers] = useState<string[]>([]);
+
+  const localVideoRef = useRef<HTMLVideoElement | null>(null);
   const [myStream, setMyStream] = useState<MediaStream | null>(null);
+
+  const screenVideoRef = useRef<HTMLVideoElement | null>(null);
+  const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
+
+  const [isPdfView, setIsPdfView] = useState(true);
+  const [isScreenView, setIsScreenView] = useState(false);
+
   const [isVideoOn, setIsVideoOn] = useState(true);
   const [isMicOn, setIsMicOn] = useState(true);
   const [isRemoteMuted, setIsRemoteMuted] = useState(false);
@@ -116,9 +124,25 @@ export default function LivePitchRoom() {
   const [isAIExpanded, setIsAIExpanded] = useState(true);
   const [isParticipantsOpen, setIsParticipantsOpen] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
-
   const [elapsedTime, setElapsedTime] = useState(0);
   const [transcript, setTranscript] = useState<any[]>([]);
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [chatMessage, setChatMessage] = useState("");
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [streamingMessage, setStreamingMessage] = useState<string | null>(null);
+  const [isVoiceOn, setIsVoiceOn] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const speechSynthesisRef = useRef<SpeechSynthesisUtterance | null>(null);
+
+  const iceCandidateBuffer = useRef<RTCIceCandidateInit[]>([]);
+
+  const recognitionRef = useRef<any>(null);
+  const handleChatRef = useRef<(text?: string) => void>(() => {});
+
+  const [showEndConfirm, setShowEndConfirm] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState<
+    "connecting" | "connected" | "disconnected"
+  >("connecting");
   const [scores, setScores] = useState({
     clarity: 94,
     confidence: 88,
@@ -134,22 +158,6 @@ export default function LivePitchRoom() {
     confidence: 88,
     marketFit: 76,
   });
-
-  const [isChatOpen, setIsChatOpen] = useState(false);
-  const [chatMessage, setChatMessage] = useState("");
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [streamingMessage, setStreamingMessage] = useState<string | null>(null);
-  const [isVoiceOn, setIsVoiceOn] = useState(false);
-  const [isListening, setIsListening] = useState(false);
-
-  const speechSynthesisRef = useRef<SpeechSynthesisUtterance | null>(null);
-  const recognitionRef = useRef<any>(null);
-  const handleChatRef = useRef<(text?: string) => void>(() => {});
-  const [connectionStatus, setConnectionStatus] = useState<
-    "connecting" | "connected" | "disconnected"
-  >("connecting");
-
-  const [showEndConfirm, setShowEndConfirm] = useState(false);
 
   // ─── Auto-scroll chat ───
   useEffect(() => {
@@ -177,10 +185,7 @@ export default function LivePitchRoom() {
 
   // ─── Timer ───
   useEffect(() => {
-    const savedStart = localStorage.getItem("stream_start");
-    let startTime = savedStart ? parseInt(savedStart) : Date.now();
-    if (!savedStart)
-      localStorage.setItem("stream_start", startTime.toString());
+    let startTime = Date.now();
 
     const timer = setInterval(() => {
       setElapsedTime(Math.floor((Date.now() - startTime) / 1000));
@@ -233,66 +238,242 @@ export default function LivePitchRoom() {
   };
 
   const stopLocalStream = () => {
-    if (myStream) myStream.getTracks().forEach((t) => t.stop());
+    if (myStream) {
+      myStream.getTracks().forEach((t) => {
+        t.stop();
+        // ✅ Remove track from peer connection
+        const sender = peer?.getSenders().find((s) => s.track === t);
+        if (sender) {
+          peer?.removeTrack(sender);
+        }
+      });
+    }
     setMyStream(null);
     if (localVideoRef.current) localVideoRef.current.srcObject = null;
     setIsVideoOn(false);
   };
-
   const handleCameraToggle = async () => {
     if (isVideoOn) {
-      stopLocalStream();
-      return;
-    }
-    try {
-      const stream = await startLocalStream(isMicOn);
-      if (
-        createOffer &&
-        socketRef.current?.readyState === WebSocket.OPEN
-      ) {
-        try {
-          const offer = await createOffer();
+      // ✅ STOP CAMERA - Remove tracks from peer
+      if (myStream) {
+        myStream.getVideoTracks().forEach((track) => {
+          track.stop();
+          const videoSender = peer
+            ?.getSenders()
+            .find((s) => s.track?.kind === "video");
+          if (videoSender) {
+            peer?.removeTrack(videoSender);
+          }
+        });
+      }
+      setIsVideoOn(false);
+
+      // ✅ RENEGOTIATE - Send new offer
+      try {
+        const offer = await createOffer?.();
+        if (socketRef.current?.readyState === WebSocket.OPEN && offer) {
           const targetEmail = users.find((u) => u !== user?.email);
           socketRef.current.send(
-            JSON.stringify({ action: "call-user", user: targetEmail, offer })
+            JSON.stringify({ action: "call-user", user: targetEmail, offer }),
           );
-        } catch (err) {
-          console.warn("Offer error:", err);
         }
+      } catch (err) {
+        console.warn("Camera toggle renegotiation error:", err);
+      }
+      return;
+    }
+
+    // ✅ START CAMERA
+    try {
+      await startLocalStream(isMicOn);
+
+      // ✅ RENEGOTIATE - Send new offer
+      try {
+        const offer = await createOffer?.();
+        if (socketRef.current?.readyState === WebSocket.OPEN && offer) {
+          const targetEmail = users.find((u) => u !== user?.email);
+          socketRef.current.send(
+            JSON.stringify({ action: "call-user", user: targetEmail, offer }),
+          );
+        }
+      } catch (err) {
+        console.warn("Camera toggle renegotiation error:", err);
       }
     } catch (err) {
       console.error("Camera error:", err);
     }
   };
 
-  const handleMicToggle = () => {
+  const handleMicToggle = async () => {
     if (!myStream) {
-      setIsMicOn(!isMicOn);
+      // ✅ No stream at all - get audio-only stream
+      try {
+        const audioStream = await navigator.mediaDevices.getUserMedia({
+          audio: true,
+          video: false,
+        });
+        setMyStream(audioStream);
+        setIsMicOn(true);
+
+        // ✅ Add audio track to peer
+        audioStream.getTracks().forEach((track) => {
+          peer?.addTrack(track, audioStream);
+        });
+
+        // ✅ Send offer to renegotiate
+        try {
+          const offer = await createOffer?.();
+          if (socketRef.current?.readyState === WebSocket.OPEN && offer) {
+            const targetEmail = users.find((u) => u !== user?.email);
+            socketRef.current.send(
+              JSON.stringify({ action: "call-user", user: targetEmail, offer }),
+            );
+          }
+        } catch (err) {
+          console.warn("Mic toggle renegotiation error:", err);
+        }
+      } catch (err) {
+        console.error("Error getting audio stream:", err);
+      }
       return;
     }
-    myStream.getAudioTracks().forEach((t) => (t.enabled = !isMicOn));
-    setIsMicOn(!isMicOn);
+    const audioTracks = myStream.getAudioTracks();
+
+    if (audioTracks.length > 0) {
+      // Toggle existing audio tracks
+      audioTracks.forEach((t) => (t.enabled = !isMicOn));
+      setIsMicOn(!isMicOn);
+    } else {
+      // ✅ No audio track (e.g., video-only stream) - add one
+      try {
+        const audioStream = await navigator.mediaDevices.getUserMedia({
+          audio: true,
+        });
+        const audioTrack = audioStream.getAudioTracks()[0];
+
+        peer?.addTrack(audioTrack, myStream);
+        myStream.addTrack(audioTrack);
+        setIsMicOn(true);
+
+        // ✅ Send offer to renegotiate
+        try {
+          const offer = await createOffer?.();
+          if (socketRef.current?.readyState === WebSocket.OPEN && offer) {
+            const targetEmail = users.find((u) => u !== user?.email);
+            socketRef.current.send(
+              JSON.stringify({ action: "call-user", user: targetEmail, offer }),
+            );
+          }
+        } catch (err) {
+          console.warn("Mic add renegotiation error:", err);
+        }
+      } catch (err) {
+        console.error("Error adding audio track:", err);
+      }
+    }
   };
 
-  // ─── Screen share ───
   const handleScreenShare = async () => {
     if (isScreenSharing) {
+      // ✅ STOP SCREEN - Switch back to camera
+      screenStream?.getTracks().forEach((track) => track.stop());
+      setScreenStream(null);
       setIsScreenSharing(false);
-      // switch back to camera
-      handleCameraToggle();
+
+      try {
+        if (myStream) {
+          const cameraTrack = myStream.getVideoTracks()[0];
+          const videoSender = peer
+            ?.getSenders()
+            .find((s) => s.track?.kind === "video");
+
+          if (videoSender && cameraTrack) {
+            // ✅ Replace screen track with camera track
+            await videoSender.replaceTrack(cameraTrack);
+          }
+        }
+      } catch (err) {
+        console.error("Error switching back to camera:", err);
+      }
+
+      // ✅ Send offer to renegotiate
+      try {
+        const offer = await createOffer?.();
+        if (socketRef.current?.readyState === WebSocket.OPEN && offer) {
+          const targetEmail = users.find((u) => u !== user?.email);
+          socketRef.current.send(
+            JSON.stringify({ action: "call-user", user: targetEmail, offer }),
+          );
+        }
+      } catch (err) {
+        console.warn("Screen share stop renegotiation error:", err);
+      }
       return;
     }
+
+    // ✅ START SCREEN SHARE
     try {
-      const screenStream = await (navigator.mediaDevices as any).getDisplayMedia(
-        { video: true, audio: true }
-      );
-      if (videoRef.current) videoRef.current.srcObject = screenStream;
-      screenStream.getVideoTracks()[0].onended = () => {
-        setIsScreenSharing(false);
-      };
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        video: true,
+        audio: true,
+      });
+
+      setScreenStream(stream);
       setIsScreenSharing(true);
+
+      // ✅ Replace video track in peer with screen track
+      const screenTrack = stream.getVideoTracks()[0];
+      const videoSender = peer
+        ?.getSenders()
+        .find((s) => s.track?.kind === "video");
+
+      if (videoSender && screenTrack) {
+        await videoSender.replaceTrack(screenTrack);
+      }
+
+      // ✅ Handle user stopping screen from system dialog
+      screenTrack.onended = async () => {
+        try {
+          if (myStream) {
+            const cameraTrack = myStream.getVideoTracks()[0];
+            if (cameraTrack && videoSender) {
+              await videoSender.replaceTrack(cameraTrack);
+            }
+          }
+        } catch (err) {
+          console.error("Error switching back to camera:", err);
+        }
+        setScreenStream(null);
+        setIsScreenSharing(false);
+
+        // ✅ Send offer to renegotiate
+        try {
+          const offer = await createOffer?.();
+          if (socketRef.current?.readyState === WebSocket.OPEN && offer) {
+            const targetEmail = users.find((u) => u !== user?.email);
+            socketRef.current.send(
+              JSON.stringify({ action: "call-user", user: targetEmail, offer }),
+            );
+          }
+        } catch (err) {
+          console.warn("Screen share end renegotiation error:", err);
+        }
+      };
+
+      // ✅ Send offer to renegotiate
+      try {
+        const offer = await createOffer?.();
+        if (socketRef.current?.readyState === WebSocket.OPEN && offer) {
+          const targetEmail = users.find((u) => u !== user?.email);
+          socketRef.current.send(
+            JSON.stringify({ action: "call-user", user: targetEmail, offer }),
+          );
+        }
+      } catch (err) {
+        console.warn("Screen share start renegotiation error:", err);
+      }
     } catch (err) {
-      console.warn("Screen share cancelled or failed:", err);
+      console.warn("Screen share cancelled:", err);
     }
   };
 
@@ -325,25 +506,31 @@ export default function LivePitchRoom() {
 
   // ─── Negotiation ───
   useEffect(() => {
-    if (!peer) return;
+    if (!peer && !createOffer) return;
     const onNegotiation = async () => {
-      if (!createOffer || !socketRef.current) return;
+      if (
+        !socketRef.current ||
+        socketRef.current.readyState !== WebSocket.OPEN
+      ) {
+        console.warn("Socket not ready, skipping negotiation");
+        return;
+      }
       try {
-        const offer = await (createOffer ? createOffer() : peer.createOffer());
+        const offer = await (createOffer ? createOffer() : peer?.createOffer());
         const targetEmail = users.find((u) => u !== user?.email);
         socketRef.current.send(
-          JSON.stringify({ action: "call-user", user: targetEmail, offer })
+          JSON.stringify({ action: "call-user", user: targetEmail, offer }),
         );
       } catch (err) {
         console.warn("Negotiation error:", err);
       }
     };
-    peer.addEventListener?.("negotiationneeded", onNegotiation);
+    peer?.addEventListener?.("negotiationneeded", onNegotiation);
     // @ts-ignore
     if (!peer.addEventListener) peer.onnegotiationneeded = onNegotiation;
     return () => {
       try {
-        peer.removeEventListener?.("negotiationneeded", onNegotiation);
+        peer?.removeEventListener?.("negotiationneeded", onNegotiation);
       } catch {}
       // @ts-ignore
       if (peer?.onnegotiationneeded === onNegotiation)
@@ -357,7 +544,10 @@ export default function LivePitchRoom() {
     const onIce = (event: RTCPeerConnectionIceEvent) => {
       if (event.candidate && socketRef.current?.readyState === WebSocket.OPEN) {
         socketRef.current.send(
-          JSON.stringify({ action: "ice-candidate", candidate: event.candidate })
+          JSON.stringify({
+            action: "ice-candidate",
+            candidate: event.candidate,
+          }),
         );
       }
     };
@@ -379,7 +569,21 @@ export default function LivePitchRoom() {
     const wsUrl = BaseUrl.startsWith("https")
       ? BaseUrl.replace(/^https/, "wss")
       : BaseUrl.replace(/^http/, "ws");
-    const socket = new WebSocket(`${wsUrl}/api/room/ws/${roomId}?token=${token}`);
+
+    const flushIceCandidates = async () => {
+      for (const c of iceCandidateBuffer.current) {
+        try {
+          await peer?.addIceCandidate(new RTCIceCandidate(c));
+        } catch (e) {
+          console.warn("ICE flush error", e);
+        }
+      }
+      iceCandidateBuffer.current = [];
+    };
+    const socket = new WebSocket(
+      `${wsUrl}/api/room/ws/${roomId}?token=${token}`,
+    );
+
     socketRef.current = socket;
 
     socket.onopen = () => {
@@ -415,7 +619,12 @@ export default function LivePitchRoom() {
             },
           ]);
           // TTS: speak AI response when voice is on
-          if (isVoiceOn && data.speaker === "AI Judge" && text && "speechSynthesis" in window) {
+          if (
+            isVoiceOn &&
+            data.speaker === "AI Judge" &&
+            text &&
+            "speechSynthesis" in window
+          ) {
             window.speechSynthesis.cancel();
             const u = new SpeechSynthesisUtterance(text);
             u.rate = 0.95;
@@ -428,13 +637,17 @@ export default function LivePitchRoom() {
         if (data.action === "incoming-call") {
           if (createAnswer) {
             try {
-              const answer = await createAnswer(data.offer);
+              // ✅ Wrap in RTCSessionDescription
+              const answer = await createAnswer(
+                new RTCSessionDescription(data.offer),
+              );
+              await flushIceCandidates();
               socketRef.current?.send(
                 JSON.stringify({
                   action: "call-accepted",
                   to: data.from,
                   answer,
-                })
+                }),
               );
             } catch (err) {
               console.error("createAnswer error:", err);
@@ -442,7 +655,11 @@ export default function LivePitchRoom() {
           } else {
             try {
               if (peer && typeof peer.setRemoteDescription === "function") {
-                await peer.setRemoteDescription(data.offer);
+                // ✅ Wrap in RTCSessionDescription
+                await peer.setRemoteDescription(
+                  new RTCSessionDescription(data.offer),
+                );
+                await flushIceCandidates();
                 const localAnswer = await peer.createAnswer();
                 await peer.setLocalDescription(localAnswer);
                 socketRef.current?.send(
@@ -450,7 +667,7 @@ export default function LivePitchRoom() {
                     action: "call-accepted",
                     to: data.from,
                     answer: localAnswer,
-                  })
+                  }),
                 );
               }
             } catch (err) {
@@ -461,17 +678,43 @@ export default function LivePitchRoom() {
 
         if (data.action === "call-accepted") {
           if (data.answer && setRemoteAnswer) {
-            await setRemoteAnswer(data.answer);
+            try {
+              // ✅ Wrap in RTCSessionDescription
+              await setRemoteAnswer(new RTCSessionDescription(data.answer));
+              await flushIceCandidates();
+            } catch (err) {
+              console.error("setRemoteAnswer error:", err);
+            }
           } else if (data.answer && peer?.setRemoteDescription) {
-            await peer.setRemoteDescription(data.answer);
+            try {
+              // ✅ Wrap in RTCSessionDescription
+              await peer.setRemoteDescription(
+                new RTCSessionDescription(data.answer),
+              );
+              await flushIceCandidates();
+            } catch (err) {
+              console.error("peer setRemoteDescription error:", err);
+            }
           }
         }
 
         if (data.action === "ice-candidate" && data.candidate) {
-          try {
-            if (peer?.addIceCandidate) await peer.addIceCandidate(data.candidate);
-          } catch (err) {
-            console.warn("ICE candidate error:", err);
+          // ✅ Always buffer first
+          iceCandidateBuffer.current.push(data.candidate);
+
+          // ✅ If we have remoteDescription, flush immediately
+          if (peer?.remoteDescription) {
+            const flushIceCandidates = async () => {
+              for (const c of iceCandidateBuffer.current) {
+                try {
+                  await peer?.addIceCandidate(new RTCIceCandidate(c));
+                } catch (e) {
+                  console.warn("ICE flush error", e);
+                }
+              }
+              iceCandidateBuffer.current = [];
+            };
+            await flushIceCandidates();
           }
         }
 
@@ -511,7 +754,7 @@ export default function LivePitchRoom() {
                   minute: "2-digit",
                 })
               : "",
-          }))
+          })),
         );
       } catch (err) {
         console.error("fetchChats error:", err);
@@ -550,29 +793,39 @@ export default function LivePitchRoom() {
   }
 
   // ─── Chat send ───
-  const handleChat = useCallback((text?: string) => {
-    const msg = (text ?? chatMessage).trim();
-    if (!msg || !socketRef.current) return;
-    socketRef.current.send(
-      JSON.stringify({
-        action: "send-message",
-        roomId,
-        user_id: user?.id,
-        text: msg,
-        speaker: user?.full_name || user?.email || "You",
-      })
-    );
-    setChatMessage("");
-  }, [roomId, user?.id, user?.full_name, user?.email, chatMessage]);
+  const handleChat = useCallback(
+    (text?: string) => {
+      const msg = (text ?? chatMessage).trim();
+      if (!msg || !socketRef.current) return;
+      socketRef.current.send(
+        JSON.stringify({
+          action: "send-message",
+          roomId,
+          user_id: user?.id,
+          text: msg,
+          speaker: user?.full_name || user?.email || "You",
+        }),
+      );
+      setChatMessage("");
+    },
+    [roomId, user?.id, user?.full_name, user?.email, chatMessage],
+  );
 
   useEffect(() => {
     handleChatRef.current = handleChat;
   }, [handleChat]);
 
+  useEffect(() => {
+    if (!slideView && !isScreenView && videoRef.current && myStream) {
+      videoRef.current.srcObject = myStream;
+    }
+  }, [slideView, myStream]);
+
   // ─── Voice input (STT) ───
   const toggleVoiceInput = useCallback(() => {
     const SpeechRecognition =
-      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      (window as any).SpeechRecognition ||
+      (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
       console.warn("Speech recognition not supported in this browser");
       return;
@@ -614,12 +867,26 @@ export default function LivePitchRoom() {
     }
   }, [chatMessage]);
 
+  //handle pdf view
+
+  function handlePdfView() {
+    setIsPdfView(true);
+    setIsScreenView(false);
+  }
+  function handleScreenView() {
+    setIsScreenView(true);
+    setIsPdfView(false);
+  }
   const overallScore = Math.round(
-    (scores.clarity + scores.confidence + scores.marketFit) / 3
+    (scores.clarity + scores.confidence + scores.marketFit) / 3,
   );
 
   const getScoreColor = (val: number) =>
-    val >= 85 ? "text-emerald-400" : val >= 65 ? "text-amber-400" : "text-red-400";
+    val >= 85
+      ? "text-emerald-400"
+      : val >= 65
+        ? "text-amber-400"
+        : "text-red-400";
 
   const getScoreRingColor = (val: number) =>
     val >= 85 ? "#34d399" : val >= 65 ? "#fbbf24" : "#f87171";
@@ -728,8 +995,8 @@ export default function LivePitchRoom() {
               connectionStatus === "connected"
                 ? "text-emerald-400 bg-emerald-400/8 border-emerald-400/15"
                 : connectionStatus === "connecting"
-                ? "text-amber-400 bg-amber-400/8 border-amber-400/15"
-                : "text-red-400 bg-red-400/8 border-red-400/15"
+                  ? "text-amber-400 bg-amber-400/8 border-amber-400/15"
+                  : "text-red-400 bg-red-400/8 border-red-400/15"
             }`}
           >
             <span
@@ -737,15 +1004,15 @@ export default function LivePitchRoom() {
                 connectionStatus === "connected"
                   ? "bg-emerald-400"
                   : connectionStatus === "connecting"
-                  ? "bg-amber-400"
-                  : "bg-red-400"
+                    ? "bg-amber-400"
+                    : "bg-red-400"
               }`}
             />
             {connectionStatus === "connected"
               ? "Connected"
               : connectionStatus === "connecting"
-              ? "Connecting…"
-              : "Disconnected"}
+                ? "Connecting…"
+                : "Disconnected"}
           </div>
         </div>
 
@@ -801,29 +1068,78 @@ export default function LivePitchRoom() {
         {/* ─── LEFT COLUMN ─── */}
         <div className="col-span-9 flex flex-col gap-4 min-h-0">
           {/* Main stage */}
-          <div className="flex-1 glass-heavy rounded-2xl overflow-hidden relative group min-h-0">
+          <div className="flex-1 glass-heavy rounded-2xl overflow-x-hidden overflow-y-scroll relative group min-h-0">
+            {slideView && (
+              <div className="absolute top-3 left-3 z-20 flex items-center gap-2">
+                <button
+                  onClick={handlePdfView}
+                  className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl border backdrop-blur-md transition-all duration-200
+          ${
+            isPdfView
+              ? "bg-amber-600/80 border-amber-500/60 text-white"
+              : "bg-black/60 border-white/10 text-white/70 hover:bg-white/10 hover:text-white"
+          }`}
+                >
+                  <FileText size={12} />
+                  PDF View
+                </button>
+
+                {isScreenSharing && (
+                  <button
+                    onClick={handleScreenView}
+                    className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl border backdrop-blur-md transition-all duration-200
+            ${
+              !isPdfView
+                ? "bg-blue-600/80 border-blue-500/60 text-white"
+                : "bg-black/60 border-white/10 text-white/70 hover:bg-white/10 hover:text-white"
+            }`}
+                  >
+                    <Monitor size={12} />
+                    Screen View
+                  </button>
+                )}
+              </div>
+            )}
+
             {slideView ? (
-              pitch?.pitch_pdf_url ? (
-                <PitchSlides pdfUrl={`${BaseUrl}/${pitch.pitch_pdf_url}`} />
+              isPdfView ? (
+                pitch?.pitch_pdf_url ? (
+                  <PitchSlides pdfUrl={`${BaseUrl}/${pitch.pitch_pdf_url}`} />
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-full text-white/30 gap-3">
+                    <Monitor size={48} className="opacity-30" />
+                    <p className="text-sm">No slides uploaded</p>
+                  </div>
+                )
               ) : (
-                <div className="flex flex-col items-center justify-center h-full text-white/30 gap-3">
-                  <Monitor size={48} className="opacity-30" />
-                  <p className="text-sm">No slides uploaded</p>
+                <div className="relative w-full h-full">
+                  <video
+                    ref={screenVideoRef}
+                    autoPlay
+                    playsInline
+                    className={`w-full h-full object-cover ${screenStream ? "block" : "hidden"}`}
+                  />
                 </div>
               )
+            ) : isVideoOn ? (
+              myStream ? (
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                "No Stream Available"
+              )
             ) : (
-              <video
-                ref={remoteVideoRef}
-                autoPlay
-                playsInline
-                muted={isRemoteMuted}
-                className="w-full h-full object-cover"
-              />
+              "No camera on"
             )}
 
             {/* Stage controls overlay */}
-            <div className="absolute bottom-4 left-4 right-4 flex items-end justify-between">
-              <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+            <div className="absolute bottom-4 left-4 right-4 flex items-end justify-between opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+              <div className="flex items-center gap-2">
                 <button
                   onClick={() => setSlideView(!slideView)}
                   className="btn-control flex items-center gap-2 bg-black/60 backdrop-blur-md text-white text-xs px-3 py-2 rounded-xl border border-white/10 hover:bg-white/10"
@@ -831,6 +1147,7 @@ export default function LivePitchRoom() {
                   {slideView ? <Video size={13} /> : <Monitor size={13} />}
                   {slideView ? "Camera View" : "Slide View"}
                 </button>
+
                 {!slideView && (
                   <button
                     onClick={() => setIsRemoteMuted((m) => !m)}
@@ -845,17 +1162,18 @@ export default function LivePitchRoom() {
                 )}
               </div>
 
-              {/* Pitch name tag */}
               {pitch?.pitch_name && (
-                <div className="glass text-white/80 text-xs px-3 py-1.5 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="glass text-white/80 text-xs px-3 py-1.5 rounded-xl">
                   {pitch.pitch_name}
                 </div>
               )}
             </div>
           </div>
-
           {/* ─── TRANSCRIPT ─── */}
-          <div className="glass-heavy rounded-2xl overflow-hidden" style={{ height: "140px" }}>
+          <div
+            className="glass-heavy rounded-2xl overflow-hidden"
+            style={{ height: "140px" }}
+          >
             <div className="flex items-center justify-between px-4 pt-3 pb-2 border-b border-white/5">
               <div className="flex items-center gap-2">
                 <Radio size={12} className="text-violet-400" />
@@ -867,17 +1185,27 @@ export default function LivePitchRoom() {
                 {transcript.length} messages
               </span>
             </div>
-            <div className="overflow-auto px-4 py-2 space-y-1.5" style={{ height: "90px" }}>
+            <div
+              className="overflow-auto px-4 py-2 space-y-1.5"
+              style={{ height: "90px" }}
+            >
               {transcript.length === 0 && !streamingMessage ? (
-                <p className="text-white/20 text-xs italic">Waiting for messages…</p>
+                <p className="text-white/20 text-xs italic">
+                  Waiting for messages…
+                </p>
               ) : (
                 <>
                   {transcript.map((msg, i) => (
-                    <div key={i} className="flex items-start gap-2 text-sm chat-bubble">
+                    <div
+                      key={i}
+                      className="flex items-start gap-2 text-sm chat-bubble"
+                    >
                       <span className="text-violet-400 font-600 text-xs whitespace-nowrap mt-0.5">
                         {msg.speaker}
                       </span>
-                      <span className="text-white/70 text-xs flex-1">{msg.text}</span>
+                      <span className="text-white/70 text-xs flex-1">
+                        {msg.text}
+                      </span>
                       {msg.time && (
                         <span className="text-white/20 text-[10px] shrink-0 mt-0.5">
                           {msg.time}
@@ -905,7 +1233,10 @@ export default function LivePitchRoom() {
         {/* ─── RIGHT COLUMN ─── */}
         <div className="col-span-3 flex flex-col gap-4 min-h-0 overflow-auto">
           {/* Self cam */}
-          <div className="glass-heavy rounded-2xl overflow-hidden relative" style={{ aspectRatio: "16/10" }}>
+          <div
+            className="glass-heavy rounded-2xl overflow-hidden relative"
+            style={{ aspectRatio: "16/10" }}
+          >
             {isVideoOn && myStream ? (
               <video
                 ref={videoRef}
@@ -990,7 +1321,11 @@ export default function LivePitchRoom() {
                     ? "bg-violet-500/20 text-violet-400 border border-violet-500/30"
                     : "bg-white/8 text-white hover:bg-white/12"
                 }`}
-                title={isVoiceOn ? "AI voice on" : "AI voice off - click to hear AI speak"}
+                title={
+                  isVoiceOn
+                    ? "AI voice on"
+                    : "AI voice off - click to hear AI speak"
+                }
               >
                 {isVoiceOn ? <Volume2 size={15} /> : <VolumeX size={15} />}
                 Voice
@@ -1049,8 +1384,8 @@ export default function LivePitchRoom() {
                 {overallScore >= 85
                   ? "Excellent"
                   : overallScore >= 70
-                  ? "Good"
-                  : "Needs Work"}
+                    ? "Good"
+                    : "Needs Work"}
               </p>
               <p className="text-white/30 text-[10px] mt-0.5">
                 Based on all metrics
@@ -1106,8 +1441,8 @@ export default function LivePitchRoom() {
                       value >= 85
                         ? "from-emerald-500 to-teal-400"
                         : value >= 65
-                        ? "from-amber-500 to-yellow-400"
-                        : "from-red-500 to-red-400"
+                          ? "from-amber-500 to-yellow-400"
+                          : "from-red-500 to-red-400"
                     }`}
                     style={{ width: `${value}%` }}
                   />
@@ -1226,7 +1561,11 @@ export default function LivePitchRoom() {
                 ? "bg-red-500/30 text-red-400 border border-red-500/50 animate-pulse"
                 : "bg-white/8 text-white hover:bg-white/12"
             }`}
-            title={isListening ? "Click to stop listening" : "Click to speak (voice input)"}
+            title={
+              isListening
+                ? "Click to stop listening"
+                : "Click to speak (voice input)"
+            }
           >
             <Mic size={18} />
           </button>
@@ -1285,7 +1624,9 @@ export default function LivePitchRoom() {
                         {m.speaker}
                       </span>
                       {m.time && (
-                        <span className="text-[10px] text-white/20">{m.time}</span>
+                        <span className="text-[10px] text-white/20">
+                          {m.time}
+                        </span>
                       )}
                     </div>
                     <div className="p-2.5 bg-white/4 rounded-xl border border-white/5 text-xs text-white/70 leading-relaxed">
@@ -1370,7 +1711,9 @@ export default function LivePitchRoom() {
                   <div className="w-6 h-6 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center text-[10px] font-700 text-white">
                     {u.charAt(0).toUpperCase()}
                   </div>
-                  <span className="text-xs text-white/70 truncate flex-1">{u}</span>
+                  <span className="text-xs text-white/70 truncate flex-1">
+                    {u}
+                  </span>
                   {u === user?.email && (
                     <span className="text-[9px] text-violet-400 bg-violet-400/10 px-1.5 py-0.5 rounded-full">
                       You

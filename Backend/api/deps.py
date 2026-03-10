@@ -72,3 +72,5 @@ async def get_user_from_token(token: str) -> User:
         user = result.scalar_one_or_none()
 
     return user
+
+

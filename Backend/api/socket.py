@@ -25,6 +25,9 @@ from db.models import User, ChatMessage
 from ai.gemini import generate_gemini_response_stream, evaluate_pitch_with_gemini
 from google.cloud import storage
 import os
+from utils.pdf_parser import extract_pitch_deck_text
+from utils.session_manager import store_session ,get_session_prompt, delete_session
+from ai.gemini import _get_persona_prompt ,build_system_prompt
 
 UPLOAD_DIR = "uploads"
 
@@ -137,6 +140,9 @@ async def create_room(
         buffer.write(contents)
 
     print("Saved file at:", file_path)
+    deck_context = extract_pitch_deck_text(file_path)
+    persona = _get_persona_prompt(investor_archetype)
+    store_session(room_id, build_system_prompt(persona, deck_context))
 
     room = Room(id=room_id, owner_id=current_user.id)
 
@@ -157,7 +163,7 @@ async def create_room(
 
     await db.commit()
 
-    return {"room_id": room_id , "pitch_id":pitch.id}
+    return {"room_id": room_id, "pitch_id": pitch.id}
 
 
 @router.put("/end/{room_id}")
@@ -198,6 +204,7 @@ async def end_session(
             speaker = c.user.full_name if c.user else "AI Judge"
             transcript_parts.append(f"{speaker}: {c.content}")
         transcript = "\n\n".join(transcript_parts) or "(No transcript)"
+        print("Evaluating...")
 
         # Run AI evaluation
         eval_result = await asyncio.to_thread(evaluate_pitch_with_gemini, transcript)
@@ -219,13 +226,13 @@ async def end_session(
             db.add(
                 AIRecommendation(pitch_id=pitch.id, category="suggestion", content=s)
             )
-
+    print("Evaluated ✅")
     # Delete room (cascades to ChatMessages)
     await db.delete(room)
     await db.commit()
 
     return {
-        "success":True,
+        "success": True,
         "message": "Session ended successfully",
         "pitch_id": pitch_id,
     }
@@ -364,13 +371,15 @@ async def websocket_room(
                 loop = asyncio.get_event_loop()
                 chunk_queue = asyncio.Queue()
                 ai_response_parts = []
+                system_prompt = get_session_prompt(room_id) 
 
                 def _produce_chunks():
                     try:
                         for chunk in generate_gemini_response_stream(
                             user_message.content,
-                            investor_archetype,
+                            system_prompt,
                             conversation_history,
+                           
                         ):
                             loop.call_soon_threadsafe(chunk_queue.put_nowait, chunk)
                     except Exception:
@@ -386,6 +395,7 @@ async def websocket_room(
                 with ThreadPoolExecutor(max_workers=1) as ex:
                     ex.submit(_produce_chunks)
                     while True:
+                        print("Working.....")
                         chunk = await chunk_queue.get()
                         if chunk is None:
                             break
@@ -400,8 +410,13 @@ async def websocket_room(
                             ),
                             room_id,
                         )
+                    print("Done")  
 
-                ai_response = "".join(ai_response_parts).strip() or "I'd like to hear more about your pitch."
+                ai_response = (
+                    "".join(ai_response_parts).strip()
+                    or "I'd like to hear more about your pitch."
+                )
+                
 
                 # save AI message
                 async with AsyncSessionLocal() as db:
@@ -466,6 +481,7 @@ async def websocket_room(
     except WebSocketDisconnect:
         email = manager.socket_to_email.get(websocket)
         manager.disconnect(websocket, room_id)
+        delete_session(room_id)
         if email:
             await manager.broadcast(
                 json.dumps({"action": "user-left", "email": email}),

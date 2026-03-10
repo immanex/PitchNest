@@ -167,8 +167,10 @@ export default function PrePitchSetup() {
     risk < 30 ? "Conservative" : risk < 60 ? "Balanced" : risk < 85 ? "Growth Oriented" : "High Risk";
 
   async function handlePitchSelection() {
-    setLoading(true);
+    
     const formData = new FormData();
+    if(!file) return alert("Plese Add Pitch deck, {right side of screen }")
+    setLoading(true);
     if (file) formData.append("file", file);
     formData.append("pitch_name", title || "Untitled Pitch");
     formData.append("description", description);
@@ -184,6 +186,8 @@ export default function PrePitchSetup() {
     formData.append("mic_enabled", String(mic));
 
     localStorage.setItem("selectedMode", mode);
+    console.log(formData)
+
 
     try {
       const response = await fetch(`${BaseUrl}/api/room/create`, {

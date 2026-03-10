@@ -1,71 +1,140 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
-
-// These styles are necessary for the PDF to look right
-// New paths for react-pdf v7+
 import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
-// Standard worker setup
+import { ChevronLeft, ChevronRight } from "lucide-react";
+
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
-// Define the Props interface
 interface PitchSlidesProps {
   pdfUrl: string;
 }
 
 const PitchSlides: React.FC<PitchSlidesProps> = ({ pdfUrl }) => {
-  // Specify that numPages can be a number or null
   const [numPages, setNumPages] = useState<number | null>(null);
   const [pageNumber, setPageNumber] = useState<number>(1);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [pageWidth, setPageWidth] = useState<number>(800);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Type the argument based on react-pdf's internal structure
-  function onDocumentLoadSuccess({ numPages }: { numPages: number }): void {
+  function onDocumentLoadSuccess({ numPages }: { numPages: number }) {
     setNumPages(numPages);
-    setPageNumber(1); // Reset to page 1 if the URL changes
+    setPageNumber(1);
+    setIsLoading(false);
   }
 
-  const changePage = (offset: number): void => {
-    setPageNumber((prevPageNumber) => prevPageNumber + offset);
+  const changePage = (offset: number) => {
+    setPageNumber((prev) => {
+      const newPage = prev + offset;
+      if (numPages && newPage >= 1 && newPage <= numPages) {
+        return newPage;
+      }
+      return prev;
+    });
   };
 
+  // Make PDF responsive to parent container
+  useEffect(() => {
+    const updateWidth = () => {
+      if (containerRef.current) {
+        setPageWidth(containerRef.current.clientWidth - 20);
+      }
+    };
+    updateWidth();
+    window.addEventListener("resize", updateWidth);
+    return () => window.removeEventListener("resize", updateWidth);
+  }, []);
+
+  // Keyboard navigation
+  useEffect(() => {
+    const handleKeyPress = (e: KeyboardEvent) => {
+      if (e.key === "ArrowLeft") changePage(-1);
+      if (e.key === "ArrowRight") changePage(1);
+    };
+    window.addEventListener("keydown", handleKeyPress);
+    return () => window.removeEventListener("keydown", handleKeyPress);
+  }, [numPages]);
+
   return (
-    <div className="flex flex-col items-center p-4 w-full">
-      <div className="border shadow-lg bg-white overflow-hidden rounded-lg">
-        // Inside PitchSlides.tsx
+    <div
+      ref={containerRef}
+      className="w-full h-full flex flex-col items-center justify-center relative"
+    >
+      {/* Loading state */}
+      {isLoading && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm z-20">
+          <div className="flex flex-col items-center gap-3">
+            <div className="w-12 h-12 border-3 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin" />
+            <p className="text-white/60 text-sm font-medium">
+              Loading slides...
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* PDF Container */}
+      <div className="relative w-full h-full flex items-center justify-center overflow-hidden">
         <Document
           file={pdfUrl}
           onLoadSuccess={onDocumentLoadSuccess}
-          className="flex justify-center"
+          loading={<div className="text-white/40">Loading PDF...</div>}
+          error={<div className="text-red-400 text-sm">Error loading PDF</div>}
+          className="flex justify-center w-full h-full"
         >
           <Page
             pageNumber={pageNumber}
-            // This makes the slide fit better in your dashboard
-            width={800}
-            renderTextLayer={false} // Disable if you don't need to select text (makes it cleaner)
-            className="shadow-2xl rounded-sm"
+            width={pageWidth}
+            renderTextLayer={false}
+            className="shadow-2xl rounded-lg"
+            loading={<div className="text-white/30">Loading page...</div>}
           />
         </Document>
-      </div>
 
-      <div className="mt-4 flex gap-4 items-center font-semibold">
+        {/* Side Navigation Buttons - Left */}
         <button
-          disabled={pageNumber <= 1}
           onClick={() => changePage(-1)}
-          className="bg-indigo-600 text-white px-6 py-2 rounded shadow-md disabled:bg-gray-300 transition-colors"
+          disabled={pageNumber <= 1}
+          className="absolute left-4 top-1/2 -translate-y-1/2 z-10 p-3 rounded-full bg-indigo-600/80 hover:bg-indigo-500 disabled:bg-gray-600/40 disabled:cursor-not-allowed text-white transition-all duration-200 hover:scale-110 active:scale-95"
+          aria-label="Previous slide"
         >
-          Previous
+          <ChevronLeft size={24} />
         </button>
 
-        <p className="text-gray-700">
-          Slide {pageNumber} of {numPages || "--"}
-        </p>
+        {/* Side Navigation Buttons - Right */}
+        <button
+          onClick={() => changePage(1)}
+          disabled={numPages === null || pageNumber >= numPages}
+          className="absolute right-4 top-1/2 -translate-y-1/2 z-10 p-3 rounded-full bg-indigo-600/80 hover:bg-indigo-500 disabled:bg-gray-600/40 disabled:cursor-not-allowed text-white transition-all duration-200 hover:scale-110 active:scale-95"
+          aria-label="Next slide"
+        >
+          <ChevronRight size={24} />
+        </button>
+      </div>
+
+      {/* Bottom Navigation Bar */}
+      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 flex items-center gap-6 bg-black/60 backdrop-blur-md px-6 py-3 rounded-full border border-white/10 shadow-lg pointer-events-auto">
+        <button
+          onClick={() => changePage(-1)}
+          disabled={pageNumber <= 1}
+          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:bg-gray-600 disabled:cursor-not-allowed text-white text-sm font-semibold transition-all duration-200 hover:shadow-lg active:scale-95"
+        >
+          <ChevronLeft size={16} />
+          Prev
+        </button>
+
+        <div className="flex items-center gap-2 text-white/80">
+          <span className="text-sm font-semibold">{pageNumber}</span>
+          <span className="text-white/40">/</span>
+          <span className="text-sm font-semibold">{numPages || "--"}</span>
+        </div>
 
         <button
-          disabled={numPages === null || pageNumber >= numPages}
           onClick={() => changePage(1)}
-          className="bg-indigo-600 text-white px-6 py-2 rounded shadow-md disabled:bg-gray-300 transition-colors"
+          disabled={numPages === null || pageNumber >= numPages}
+          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:bg-gray-600 disabled:cursor-not-allowed text-white text-sm font-semibold transition-all duration-200 hover:shadow-lg active:scale-95"
         >
           Next
+          <ChevronRight size={16} />
         </button>
       </div>
     </div>
