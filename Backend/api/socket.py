@@ -32,7 +32,7 @@ from google.cloud import storage
 import os
 
 router = APIRouter(prefix="/room", tags=["room"])
-BUCKET_NAME = "pitchnest-media "
+BUCKET_NAME = "pitchnest-media"
 
 
 class ConnectionManager:
