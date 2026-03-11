@@ -35,7 +35,7 @@ jobs:
             --region ${{ env.REGION }} \
             --allow-unauthenticated \
             --add-cloudsql-instances pitchnest-live:us-central1:pitchnest-db \
-            --set-env-vars SECRET_KEY=${{ secrets.SECRET_KEY }},GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }},DATABASE_URL=${{ secrets.DATABASE_URL }}
+            --set-env-vars SECRET_KEY=${{ secrets.SECRET_KEY }},GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }},DATABASE_URL=${{ secrets.DATABASE_URL }},OPENROUTER_API_KEY=${{ secrets.OPENROUTER_API_KEY }}
 
   deploy-frontend:
     runs-on: ubuntu-latest
