@@ -4,6 +4,7 @@ pydantic_settings
 pydantic[email]
 PyJWT
 passlib
+argon2-cffi
 python-multipart
 bcrypt
 asyncpg
@@ -13,6 +14,8 @@ fastapi-mail
 python-jose
 groq
 google-generativeai
+google-cloud-storage
+alembic
 google-cloud-storage
 argon2-cffi
 pymupdf
