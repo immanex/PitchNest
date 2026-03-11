@@ -45,15 +45,23 @@ Pass `investor_archetype` when creating a room to select the persona.
 
 - `POST /api/ai/evaluate` – Body: `{"transcript": "..."}` – Returns full evaluation (Gemini 1.5-pro)
 
-### 5. Real-time Voice Output
-- AI responses spoken via browser SpeechSynthesis
-- Toggle in live room (volume button)
-- Interruptions: user message cancels AI speech
+### 5. Real-time Voice Output (Implemented)
+- AI responses spoken via browser SpeechSynthesis when "Voice" is on
+- Toggle in live room controls (Voice button)
+- User typing/sending cancels AI speech (interruption)
 
 ### 6. Dynamic Questioning
 - Conversation history passed to AI for contextual follow-ups
 - Adapts questions based on founder responses
 
-### 7. Roadmap (future)
+### 7. Streaming Responses (Implemented)
+- AI responses stream token-by-token for faster perceived latency
+- Frontend shows typing indicator and accumulates chunks in real time
+
+### 8. Voice Input (STT) (Implemented)
+- Click mic button to speak; speech is transcribed and sent as a message
+- Uses Web Speech API (Chrome, Edge, Safari)
+
+### 9. Roadmap (future)
 - Multimodal reasoning: audio, video, slides
 - Agent orchestration: multiple AI agents responding to each other

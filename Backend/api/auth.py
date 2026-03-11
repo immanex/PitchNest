@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 @router.post("/signup", response_model=UserRead, status_code=status.HTTP_201_CREATED)
 async def signup(user_in: UserCreate, db: AsyncSession = Depends(get_db)):
 
-    query = select(User).where(User.email == user_in.email)
+    query = select(User).where(User.email == user_in.email.lower())
     result = await db.execute(query)
     existing_user = result.scalar_one_or_none()
 
@@ -39,7 +39,7 @@ async def signup(user_in: UserCreate, db: AsyncSession = Depends(get_db)):
         )
 
     user = User(
-        email=user_in.email,
+        email=user_in.email.lower(),
         hashed_password=get_password_hash(user_in.password),
         full_name=user_in.name,
         is_verified=False,
@@ -59,7 +59,7 @@ async def login_access_token(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
 ) -> Token:
     print("Login attempt for:", form_data.username)
-    query = select(User).where(User.email == form_data.username)
+    query = select(User).where(User.email == form_data.username.lower())
     result = await db.execute(query)
     user = result.scalar_one_or_none()
 

@@ -1,8 +1,18 @@
-from fastapi import WebSocket, WebSocketDisconnect, APIRouter, Depends
+from fastapi import (
+    WebSocket,
+    WebSocketDisconnect,
+    APIRouter,
+    Depends,
+    UploadFile,
+    File,
+    Form,
+)
+
 from typing import Dict, List, Annotated
 import uuid
 import json
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
@@ -12,7 +22,16 @@ from db.models import Pitch, User, Room, AIRecommendation
 from api.deps import get_current_active_user, get_current_user, get_user_from_token
 from schemas.socket import RoomCreate
 from db.models import User, ChatMessage
-from ai.gemini import generate_gemini_response, evaluate_pitch_with_gemini
+from ai.gemini import generate_gemini_response_stream, evaluate_pitch_with_gemini
+from google.cloud import storage
+import os
+from utils.pdf_parser import extract_pitch_deck_text
+from utils.session_manager import store_session ,get_session_prompt, delete_session
+from ai.gemini import _get_persona_prompt ,build_system_prompt
+
+UPLOAD_DIR = "uploads"
+
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 
 router = APIRouter(prefix="/room", tags=["room"])
@@ -69,7 +88,9 @@ class ConnectionManager:
                 del self.rooms[room_id]
         print(f"❌ {email or 'unknown'} disconnected from room: {room_id}")
 
-    async def broadcast(self, message: str, room_id: str, exclude_ws: WebSocket | None = None):
+    async def broadcast(
+        self, message: str, room_id: str, exclude_ws: WebSocket | None = None
+    ):
         """Send a message to everyone in the room. Iterate over a copy to avoid modification during send."""
         room = self.rooms.get(room_id, {})
         connections = list(room.values())
@@ -99,23 +120,42 @@ async def test():
 ## room creation endpoint
 @router.post("/create")
 async def create_room(
-    room_data: dict,
-    current_user: Annotated[User, Depends(get_current_active_user)],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    pitch_name: str = Form(...),
+    industry: str = Form(...),
+    startup_type: str = Form(...),
+    experience_level: str = Form(...),
+    modeId: str = Form(...),
+    investor_archetype: str = Form(...),
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
 ):
 
     room_id = current_user.id + "-" + str(uuid.uuid4())[:8]
 
+    file_path = os.path.join(UPLOAD_DIR, file.filename)
+
+    with open(file_path, "wb") as buffer:
+        contents = await file.read()
+        buffer.write(contents)
+
+    print("Saved file at:", file_path)
+    deck_context = extract_pitch_deck_text(file_path)
+    persona = _get_persona_prompt(investor_archetype)
+    store_session(room_id, build_system_prompt(persona, deck_context))
+
     room = Room(id=room_id, owner_id=current_user.id)
 
     pitch = Pitch(
+        pitch_name=pitch_name,
+        pitch_pdf_url=file_path,
         user_id=current_user.id,
         room_id=room_id,
-        industry=room_data.get("industry"),
-        startup_type=room_data.get("startup_type"),
-        experience_level=room_data.get("experience_level"),
-        mode=room_data.get("modeId", "Practice"),
-        investor_archetype=room_data.get("investor_archetype"),
+        industry=industry,
+        startup_type=startup_type,
+        experience_level=experience_level,
+        mode=modeId,
+        investor_archetype=investor_archetype,
     )
 
     db.add(room)
@@ -123,7 +163,7 @@ async def create_room(
 
     await db.commit()
 
-    return {"room_id": room_id}
+    return {"room_id": room_id, "pitch_id": pitch.id}
 
 
 @router.put("/end/{room_id}")
@@ -164,11 +204,10 @@ async def end_session(
             speaker = c.user.full_name if c.user else "AI Judge"
             transcript_parts.append(f"{speaker}: {c.content}")
         transcript = "\n\n".join(transcript_parts) or "(No transcript)"
+        print("Evaluating...")
 
         # Run AI evaluation
-        eval_result = await asyncio.to_thread(
-            evaluate_pitch_with_gemini, transcript
-        )
+        eval_result = await asyncio.to_thread(evaluate_pitch_with_gemini, transcript)
 
         # Update pitch with scores and feedback
         pitch.overall_score = eval_result["overall_score"]
@@ -184,13 +223,16 @@ async def end_session(
         for w in eval_result.get("weaknesses", []):
             db.add(AIRecommendation(pitch_id=pitch.id, category="weakness", content=w))
         for s in eval_result.get("suggestions", []):
-            db.add(AIRecommendation(pitch_id=pitch.id, category="suggestion", content=s))
-
+            db.add(
+                AIRecommendation(pitch_id=pitch.id, category="suggestion", content=s)
+            )
+    print("Evaluated ✅")
     # Delete room (cascades to ChatMessages)
     await db.delete(room)
     await db.commit()
 
     return {
+        "success": True,
         "message": "Session ended successfully",
         "pitch_id": pitch_id,
     }
@@ -325,13 +367,54 @@ async def websocket_room(
                         for c in prev_chats
                     ]
 
-                # generate AI response (with investor personality + dynamic questioning)
-                ai_response = await asyncio.to_thread(
-                    generate_gemini_response,
-                    user_message.content,
-                    investor_archetype,
-                    conversation_history,
+                # Stream AI response for faster perceived latency (producer in thread)
+                loop = asyncio.get_event_loop()
+                chunk_queue = asyncio.Queue()
+                ai_response_parts = []
+                system_prompt = get_session_prompt(room_id) 
+
+                def _produce_chunks():
+                    try:
+                        for chunk in generate_gemini_response_stream(
+                            user_message.content,
+                            system_prompt,
+                            conversation_history,
+                           
+                        ):
+                            loop.call_soon_threadsafe(chunk_queue.put_nowait, chunk)
+                    except Exception:
+                        # Ensure the consumer doesn't hang if the producer fails mid-stream.
+                        loop.call_soon_threadsafe(
+                            chunk_queue.put_nowait,
+                            "\n[AI error: failed to stream response. Please try again.]",
+                        )
+                    finally:
+                        # Sentinel: always signal completion to unblock the consumer loop.
+                        loop.call_soon_threadsafe(chunk_queue.put_nowait, None)
+
+                with ThreadPoolExecutor(max_workers=1) as ex:
+                    ex.submit(_produce_chunks)
+                    while True:
+                        chunk = await chunk_queue.get()
+                        if chunk is None:
+                            break
+                        ai_response_parts.append(chunk)
+                        await manager.broadcast(
+                            json.dumps(
+                                {
+                                    "action": "ai-response-chunk",
+                                    "speaker": "AI Judge",
+                                    "chunk": chunk,
+                                }
+                            ),
+                            room_id,
+                        )  
+
+                ai_response = (
+                    "".join(ai_response_parts).strip()
+                    or "I'd like to hear more about your pitch."
                 )
+                
 
                 # save AI message
                 async with AsyncSessionLocal() as db:
@@ -345,7 +428,7 @@ async def websocket_room(
                     await db.commit()
                     await db.refresh(ai_message)
 
-                # broadcast AI message
+                # broadcast final AI message (for transcript, TTS, etc.)
                 await manager.broadcast(
                     json.dumps(
                         {
@@ -396,6 +479,7 @@ async def websocket_room(
     except WebSocketDisconnect:
         email = manager.socket_to_email.get(websocket)
         manager.disconnect(websocket, room_id)
+        delete_session(room_id)
         if email:
             await manager.broadcast(
                 json.dumps({"action": "user-left", "email": email}),

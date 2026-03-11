@@ -9,7 +9,8 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7
     DATABASE_URL: str
     GROQ_API_KEY: str | None = None  # legacy, optional
-    GEMINI_API_KEY: str | None = None  # primary for AI features 
+    GEMINI_API_KEY: str | None = None  # primary for AI features
+    OPEN_ROUTER_KEY: str | None = None
 
     class Config:
         env_file = ".env"
