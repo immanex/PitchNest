@@ -1,13 +1,14 @@
 import requests
 import json
+from core.config import settings
 
-
+OPEN_ROUTER_KEY = settings.OPEN_ROUTER_KEY
 # First API call with reasoning
 def model1(text):
     response = requests.post(
         url="https://openrouter.ai/api/v1/chat/completions",
         headers={
-            "Authorization": "Bearer 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",
+            "Authorization": "Bearer {OPEN_ROUTER_KEY}",
             "Content-Type": "application/json",
         },
         data=json.dumps(
