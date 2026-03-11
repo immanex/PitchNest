@@ -23,14 +23,13 @@ app.add_middleware(
 
 # Import routes after app is created to avoid circular imports
 try:
-    from api import auth, onboarding, dashboard, socket, ai_routes, storage
+    from api import auth, onboarding, dashboard, socket, ai_routes
 
     app.include_router(auth.router, prefix="/api")
     app.include_router(onboarding.router, prefix="/api")
     app.include_router(dashboard.router, prefix="/api")
     app.include_router(socket.router, prefix="/api")
     app.include_router(ai_routes.router, prefix="/api")
-    app.include_router(storage.router, prefix="/api/storage")
     print("✅ All routes loaded successfully")
 except Exception as e:
     print(f"❌ ERROR loading routes: {e}")
