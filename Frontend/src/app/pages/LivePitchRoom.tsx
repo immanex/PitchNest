@@ -31,6 +31,7 @@ import {
   ScreenShareOff,
   Settings,
   FileText,
+  Loader2,
 } from "lucide-react";
 
 import { useUser } from "../context/UserContext";
@@ -138,6 +139,8 @@ export default function LivePitchRoom() {
 
   const recognitionRef = useRef<any>(null);
   const handleChatRef = useRef<(text?: string) => void>(() => {});
+
+  const [evaluateLoading, setEvalateLoading] = useState(false);
 
   const [showEndConfirm, setShowEndConfirm] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<
@@ -777,6 +780,7 @@ export default function LivePitchRoom() {
   // ─── End session ───
   async function handleSessionEnd() {
     try {
+      setEvalateLoading(true);
       const res = await fetch(`${BaseUrl}/api/room/end/${roomId}`, {
         method: "PUT",
         headers: { Authorization: `Bearer ${token}` },
@@ -790,9 +794,11 @@ export default function LivePitchRoom() {
         console.error("End session failed:", data);
         alert("Failed to end session. Please try again.");
       }
+      setEvalateLoading(false);
     } catch (err) {
       console.error("End session error:", err);
       alert("Failed to end session. Please try again.");
+      setEvalateLoading(false);
     }
   }
 
@@ -1072,7 +1078,7 @@ export default function LivePitchRoom() {
         {/* ─── LEFT COLUMN ─── */}
         <div className="col-span-9 flex flex-col gap-4 min-h-0">
           {/* Main stage */}
-          <div className="flex-1 glass-heavy rounded-2xl overflow-x-hidden overflow-y-scroll relative group min-h-0">
+          <div className="flex-1 glass-heavy rounded-2xl overflow-hidden relative group min-h-0">
             {slideView && (
               <div className="absolute top-3 left-3 z-20 flex items-center gap-2">
                 <button
@@ -1337,10 +1343,25 @@ export default function LivePitchRoom() {
 
               <button
                 onClick={() => setShowEndConfirm(true)}
-                className="btn-control flex flex-col items-center gap-1 py-2.5 rounded-xl text-[10px] font-500 bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30 transition-all"
+                disabled={evaluateLoading}
+                className={`btn-control flex flex-col items-center justify-center gap-1 py-2.5 rounded-xl text-[10px] font-500 border transition-all
+  ${
+    evaluateLoading
+      ? "bg-red-500/10 text-red-300 border-red-500/20 cursor-not-allowed"
+      : "bg-red-500/20 text-red-400 border-red-500/30 hover:bg-red-500/30"
+  }`}
               >
-                <X size={15} />
-                End
+                {evaluateLoading ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin" />
+                    Eval...
+                  </>
+                ) : (
+                  <>
+                    <X size={15} />
+                    End
+                  </>
+                )}
               </button>
             </div>
           </div>

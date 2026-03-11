@@ -35,14 +35,21 @@ const PitchSlides: React.FC<PitchSlidesProps> = ({ pdfUrl }) => {
 
   // Make PDF responsive to parent container
   useEffect(() => {
-    const updateWidth = () => {
-      if (containerRef.current) {
-        setPageWidth(containerRef.current.clientWidth - 20);
-      }
-    };
-    updateWidth();
-    window.addEventListener("resize", updateWidth);
-    return () => window.removeEventListener("resize", updateWidth);
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      const width = entry.contentRect.width;
+
+      // limit max width so slides don't overflow on laptop
+      const maxWidth = 1100;
+
+      setPageWidth(Math.min(width - 40, maxWidth));
+    });
+
+    if (containerRef.current) {
+      observer.observe(containerRef.current);
+    }
+
+    return () => observer.disconnect();
   }, []);
 
   // Keyboard navigation
@@ -73,7 +80,7 @@ const PitchSlides: React.FC<PitchSlidesProps> = ({ pdfUrl }) => {
       )}
 
       {/* PDF Container */}
-      <div className="relative w-full h-full flex items-center justify-center overflow-hidden">
+      <div className="relative w-full h-full flex items-center justify-center overflow-auto">
         <Document
           file={pdfUrl}
           onLoadSuccess={onDocumentLoadSuccess}

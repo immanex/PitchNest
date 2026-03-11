@@ -7,12 +7,14 @@ AI module using Google Gemini for PitchNest.
 import json
 import re
 from typing import Any
+from ai.open_router import model1
 
 from core.config import settings
 
 _gemini_chat = _gemini_pro = None
 try:
     import google.generativeai as genai
+
     if settings.GEMINI_API_KEY:
         genai.configure(api_key=settings.GEMINI_API_KEY)
         _gemini_chat = genai.GenerativeModel("gemini-3-flash-preview")
@@ -123,7 +125,6 @@ def generate_gemini_response_stream(
 ):
 
     # Build pitch deck context block
-
     if not _gemini_chat:
         yield "AI is not configured. Add GEMINI_API_KEY to .env"
         return
@@ -172,8 +173,8 @@ Respond with exactly this JSON structure:
 
     if _gemini_pro:
         model = _gemini_pro
-        resp = model.generate_content(prompt)
-        raw = (resp.text or "").strip()
+        resp = model1(prompt)
+        raw = (resp['content'] or "").strip()
     else:
         # Fallback: simple heuristic if no Gemini
         wc = len(transcript.split())
