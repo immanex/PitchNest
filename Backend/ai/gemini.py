@@ -9,6 +9,7 @@ import re
 from typing import Any
 from ai.open_router import model1
 
+
 from core.config import settings
 
 _gemini_chat = _gemini_pro = None
@@ -143,6 +144,7 @@ def generate_gemini_response_stream(
         if chunk.text:
             full_text.append(chunk.text)
             yield chunk.text
+    
 
 
 def evaluate_pitch_with_gemini(transcript: str) -> dict[str, Any]:
@@ -174,7 +176,7 @@ Respond with exactly this JSON structure:
     if _gemini_pro:
         model = _gemini_pro
         resp = model1(prompt)
-        raw = (resp['content'] or "").strip()
+        raw = (resp["content"] or "").strip()
     else:
         # Fallback: simple heuristic if no Gemini
         wc = len(transcript.split())
@@ -223,3 +225,4 @@ Respond with exactly this JSON structure:
         "weaknesses": list(data.get("weaknesses", [])),
         "suggestions": list(data.get("suggestions", [])),
     }
+

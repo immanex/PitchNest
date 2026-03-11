@@ -8,7 +8,7 @@ def model1(text):
     response = requests.post(
         url="https://openrouter.ai/api/v1/chat/completions",
         headers={
-            "Authorization": "Bearer {OPEN_ROUTER_KEY}",
+            "Authorization": f"Bearer {OPEN_ROUTER_KEY}",
             "Content-Type": "application/json",
         },
         data=json.dumps(

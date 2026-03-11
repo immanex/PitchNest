@@ -82,7 +82,7 @@ const PitchSlides: React.FC<PitchSlidesProps> = ({ pdfUrl }) => {
       {/* PDF Container */}
       <div className="relative w-full h-full flex items-center justify-center overflow-auto">
         <Document
-          file={pdfUrl}
+          file={{ url: pdfUrl }}
           onLoadSuccess={onDocumentLoadSuccess}
           loading={<div className="text-white/40">Loading PDF...</div>}
           error={<div className="text-red-400 text-sm">Error loading PDF</div>}

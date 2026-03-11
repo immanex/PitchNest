@@ -19,9 +19,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-script_dir = os.path.dirname(__file__)
-upload_path = os.path.join(script_dir, "uploads")
-app.mount("/uploads", StaticFiles(directory=upload_path), name="uploads")
+
 
 # Import routes after app is created to avoid circular imports
 try:

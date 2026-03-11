@@ -26,15 +26,13 @@ from ai.gemini import generate_gemini_response_stream, evaluate_pitch_with_gemin
 from google.cloud import storage
 import os
 from utils.pdf_parser import extract_pitch_deck_text
-from utils.session_manager import store_session ,get_session_prompt, delete_session
-from ai.gemini import _get_persona_prompt ,build_system_prompt
-
-UPLOAD_DIR = "uploads"
-
-os.makedirs(UPLOAD_DIR, exist_ok=True)
-
+from utils.session_manager import store_session, get_session_prompt, delete_session
+from ai.gemini import _get_persona_prompt, build_system_prompt
+from google.cloud import storage
+import os
 
 router = APIRouter(prefix="/room", tags=["room"])
+BUCKET_NAME = "pitchnest-media "
 
 
 class ConnectionManager:
@@ -117,6 +115,24 @@ async def test():
     return {"message": "Socket connection is working!"}
 
 
+## upload pdf
+async def upload_file_to_gcs(file):
+
+    storage_client = storage.Client()
+
+    bucket = storage_client.bucket(BUCKET_NAME)
+
+    blob = bucket.blob(file.filename)
+
+    contents = await file.read()
+
+    blob.upload_from_string(contents, content_type=file.content_type)
+
+    print("File uploaded to GCS:", blob.public_url)
+
+    return blob.public_url
+
+
 ## room creation endpoint
 @router.post("/create")
 async def create_room(
@@ -133,22 +149,20 @@ async def create_room(
 
     room_id = current_user.id + "-" + str(uuid.uuid4())[:8]
 
-    file_path = os.path.join(UPLOAD_DIR, file.filename)
+    url = await upload_file_to_gcs(file)
 
-    with open(file_path, "wb") as buffer:
-        contents = await file.read()
-        buffer.write(contents)
+    print("Uploaded file to:", url)
 
-    print("Saved file at:", file_path)
-    deck_context = extract_pitch_deck_text(file_path)
+    deck_context = extract_pitch_deck_text(url)
     persona = _get_persona_prompt(investor_archetype)
+
     store_session(room_id, build_system_prompt(persona, deck_context))
 
     room = Room(id=room_id, owner_id=current_user.id)
 
     pitch = Pitch(
         pitch_name=pitch_name,
-        pitch_pdf_url=file_path,
+        pitch_pdf_url=url,
         user_id=current_user.id,
         room_id=room_id,
         industry=industry,
@@ -371,7 +385,7 @@ async def websocket_room(
                 loop = asyncio.get_event_loop()
                 chunk_queue = asyncio.Queue()
                 ai_response_parts = []
-                system_prompt = get_session_prompt(room_id) 
+                system_prompt = get_session_prompt(room_id)
 
                 def _produce_chunks():
                     try:
@@ -379,7 +393,6 @@ async def websocket_room(
                             user_message.content,
                             system_prompt,
                             conversation_history,
-                           
                         ):
                             loop.call_soon_threadsafe(chunk_queue.put_nowait, chunk)
                     except Exception:
@@ -408,7 +421,7 @@ async def websocket_room(
                                 }
                             ),
                             room_id,
-                        )  
+                        )
 
                 ai_response = (
                     "".join(ai_response_parts).strip()

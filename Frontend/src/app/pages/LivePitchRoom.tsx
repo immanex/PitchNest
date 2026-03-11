@@ -1114,7 +1114,7 @@ export default function LivePitchRoom() {
             {slideView ? (
               isPdfView ? (
                 pitch?.pitch_pdf_url ? (
-                  <PitchSlides pdfUrl={`${BaseUrl}/${pitch.pitch_pdf_url}`} />
+                  <PitchSlides pdfUrl={pitch.pitch_pdf_url} />
                 ) : (
                   <div className="flex flex-col items-center justify-center h-full text-white/30 gap-3">
                     <Monitor size={48} className="opacity-30" />
