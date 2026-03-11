@@ -15,6 +15,8 @@ python-jose
 groq
 google-generativeai
 google-cloud-storage
+alembic
+google-cloud-storage
 argon2-cffi
 pymupdf
 
