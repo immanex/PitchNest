@@ -15,4 +15,5 @@ groq
 google-generativeai
 google-cloud-storage
 argon2-cffi
+pymupdf
 
