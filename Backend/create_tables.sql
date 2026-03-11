@@ -1,5 +1,4 @@
-c-- Create all tables for PitchNest
-
+-- USERS
 CREATE TABLE IF NOT EXISTS users (
     id VARCHAR PRIMARY KEY,
     email VARCHAR UNIQUE NOT NULL,
@@ -12,6 +11,8 @@ CREATE TABLE IF NOT EXISTS users (
 
 CREATE INDEX IF NOT EXISTS ix_users_email ON users(email);
 
+
+-- USER PROFILES
 CREATE TABLE IF NOT EXISTS user_profiles (
     id VARCHAR PRIMARY KEY,
     user_id VARCHAR UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -19,6 +20,8 @@ CREATE TABLE IF NOT EXISTS user_profiles (
     ai_preferences JSON
 );
 
+
+-- STARTUP PROFILES
 CREATE TABLE IF NOT EXISTS startup_profiles (
     id VARCHAR PRIMARY KEY,
     founder_id VARCHAR NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -29,25 +32,41 @@ CREATE TABLE IF NOT EXISTS startup_profiles (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+
+-- PITCHES
 CREATE TABLE IF NOT EXISTS pitches (
     id VARCHAR PRIMARY KEY,
+
+    pitch_name VARCHAR,
+
     user_id VARCHAR NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+
     startup_id VARCHAR REFERENCES startup_profiles(id) ON DELETE SET NULL,
+
+    pitch_pdf_url VARCHAR,
+
     industry VARCHAR,
     startup_type VARCHAR,
     experience_level VARCHAR,
+
     mode VARCHAR NOT NULL DEFAULT 'Practice',
     investor_archetype VARCHAR,
+
     room_id VARCHAR,
+
     overall_score FLOAT,
     communication_score FLOAT,
     clarity_score FLOAT,
     market_fit_score FLOAT,
+
     verdict VARCHAR,
     feedback_summary TEXT,
+
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+
+-- AI RECOMMENDATIONS
 CREATE TABLE IF NOT EXISTS ai_recommendations (
     id VARCHAR PRIMARY KEY,
     pitch_id VARCHAR NOT NULL REFERENCES pitches(id) ON DELETE CASCADE,
@@ -55,6 +74,8 @@ CREATE TABLE IF NOT EXISTS ai_recommendations (
     content TEXT NOT NULL
 );
 
+
+-- ROOMS
 CREATE TABLE IF NOT EXISTS rooms (
     id VARCHAR PRIMARY KEY,
     owner_id VARCHAR NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -62,12 +83,16 @@ CREATE TABLE IF NOT EXISTS rooms (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+
+-- ROOM MEMBERS (many-to-many)
 CREATE TABLE IF NOT EXISTS room_members (
     room_id VARCHAR NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
     user_id VARCHAR NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     PRIMARY KEY (room_id, user_id)
 );
 
+
+-- CHAT MESSAGES
 CREATE TABLE IF NOT EXISTS chat_messages (
     id VARCHAR PRIMARY KEY,
     room_id VARCHAR NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
