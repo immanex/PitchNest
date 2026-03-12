@@ -30,6 +30,7 @@ from utils.session_manager import store_session, get_session_prompt, delete_sess
 from ai.gemini import _get_persona_prompt, build_system_prompt
 from google.cloud import storage
 import os
+from datetime import timedelta
 
 router = APIRouter(prefix="/room", tags=["room"])
 BUCKET_NAME = "pitchnest-media"
@@ -116,21 +117,21 @@ async def test():
 
 
 ## upload pdf
+
+
 async def upload_file_to_gcs(file):
-
     storage_client = storage.Client()
-
     bucket = storage_client.bucket(BUCKET_NAME)
-
     blob = bucket.blob(file.filename)
-
     contents = await file.read()
-
     blob.upload_from_string(contents, content_type=file.content_type)
 
-    # print("File uploaded to GCS:", blob.authenticated_url)
+    # Generate signed URL valid for 7 days
+    signed_url = blob.generate_signed_url(
+        version="v4", expiration=timedelta(days=7), method="GET"
+    )
 
-    return blob.authenticated_url
+    return signed_url
 
 
 ## room creation endpoint
@@ -425,7 +426,6 @@ async def websocket_room(
                     "".join(ai_response_parts).strip()
                     or "I'd like to hear more about your pitch."
                 )
-                
 
                 # save AI message
                 async with AsyncSessionLocal() as db:
