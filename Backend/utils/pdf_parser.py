@@ -1,4 +1,4 @@
-import fitz  # PyMuPDF
+import fitz
 import requests
 from io import BytesIO
 
@@ -6,11 +6,17 @@ from io import BytesIO
 def extract_pitch_deck_text(pdf_path: str) -> str:
     """Extract clean text from pitch deck PDF (local or URL)."""
 
-    # Handle cloud URL
     if pdf_path.startswith("http"):
-        response = requests.get('https://storage.googleapis.com/pitchnest-media/PitchNest%20Live%20Hackathon%20Project%20Brief%20copy.pdf')
+
+        response = requests.get(pdf_path)
+
+        if response.status_code != 200:
+            raise Exception(f"Failed to download PDF: {response.status_code}")
+
         pdf_bytes = BytesIO(response.content)
+
         doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+
     else:
         doc = fitz.open(pdf_path)
 
@@ -24,7 +30,6 @@ def extract_pitch_deck_text(pdf_path: str) -> str:
 
     full_text = "\n\n".join(pages)
 
-    # limit tokens for LLM
     if len(full_text) > 8000:
         full_text = full_text[:8000] + "\n\n[... deck truncated]"
 

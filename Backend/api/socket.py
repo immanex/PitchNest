@@ -128,9 +128,9 @@ async def upload_file_to_gcs(file):
 
     blob.upload_from_string(contents, content_type=file.content_type)
 
-    print("File uploaded to GCS:", blob.public_url)
+    # print("File uploaded to GCS:", blob.authenticated_url)
 
-    return blob.public_url
+    return blob.authenticated_url
 
 
 ## room creation endpoint
@@ -150,8 +150,6 @@ async def create_room(
     room_id = current_user.id + "-" + str(uuid.uuid4())[:8]
 
     url = await upload_file_to_gcs(file)
-
-    print("Uploaded file to:", url)
 
     deck_context = extract_pitch_deck_text(url)
     persona = _get_persona_prompt(investor_archetype)

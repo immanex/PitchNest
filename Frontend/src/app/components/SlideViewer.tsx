@@ -16,6 +16,31 @@ const PitchSlides: React.FC<PitchSlidesProps> = ({ pdfUrl }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [pageWidth, setPageWidth] = useState<number>(800);
   const [isLoading, setIsLoading] = useState(true);
+  const [pdfFile, setPdfFile] = useState<Blob | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  // Fetch PDF from authenticated URL
+  useEffect(() => {
+    const fetchPdf = async () => {
+      try {
+        setIsLoading(true);
+        const response = await fetch(pdfUrl);
+        if (!response.ok) {
+          throw new Error(`Failed to fetch PDF: ${response.status}`);
+        }
+        const blob = await response.blob();
+        setPdfFile(blob);
+        setError(null);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to load PDF");
+        setIsLoading(false);
+      }
+    };
+
+    if (pdfUrl) {
+      fetchPdf();
+    }
+  }, [pdfUrl]);
 
   function onDocumentLoadSuccess({ numPages }: { numPages: number }) {
     setNumPages(numPages);
@@ -33,15 +58,11 @@ const PitchSlides: React.FC<PitchSlidesProps> = ({ pdfUrl }) => {
     });
   };
 
-  // Make PDF responsive to parent container
   useEffect(() => {
     const observer = new ResizeObserver((entries) => {
       const entry = entries[0];
       const width = entry.contentRect.width;
-
-      // limit max width so slides don't overflow on laptop
       const maxWidth = 1100;
-
       setPageWidth(Math.min(width - 40, maxWidth));
     });
 
@@ -52,7 +73,6 @@ const PitchSlides: React.FC<PitchSlidesProps> = ({ pdfUrl }) => {
     return () => observer.disconnect();
   }, []);
 
-  // Keyboard navigation
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
       if (e.key === "ArrowLeft") changePage(-1);
@@ -79,23 +99,35 @@ const PitchSlides: React.FC<PitchSlidesProps> = ({ pdfUrl }) => {
         </div>
       )}
 
+      {/* Error state */}
+      {error && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm z-20">
+          <div className="flex flex-col items-center gap-3 bg-red-900/40 border border-red-500/50 px-6 py-4 rounded-lg">
+            <p className="text-red-400 text-sm font-medium">Error loading PDF</p>
+            <p className="text-red-300/70 text-xs">{error}</p>
+          </div>
+        </div>
+      )}
+
       {/* PDF Container */}
       <div className="relative w-full h-full flex items-center justify-center overflow-auto">
-        <Document
-          file={{ url: pdfUrl }}
-          onLoadSuccess={onDocumentLoadSuccess}
-          loading={<div className="text-white/40">Loading PDF...</div>}
-          error={<div className="text-red-400 text-sm">Error loading PDF</div>}
-          className="flex justify-center w-full h-full"
-        >
-          <Page
-            pageNumber={pageNumber}
-            width={pageWidth}
-            renderTextLayer={false}
-            className="shadow-2xl rounded-lg"
-            loading={<div className="text-white/30">Loading page...</div>}
-          />
-        </Document>
+        {pdfFile ? (
+          <Document
+            file={pdfFile}
+            onLoadSuccess={onDocumentLoadSuccess}
+            loading={<div className="text-white/40">Loading PDF...</div>}
+            error={<div className="text-red-400 text-sm">Error loading PDF</div>}
+            className="flex justify-center w-full h-full"
+          >
+            <Page
+              pageNumber={pageNumber}
+              width={pageWidth}
+              renderTextLayer={false}
+              className="shadow-2xl rounded-lg"
+              loading={<div className="text-white/30">Loading page...</div>}
+            />
+          </Document>
+        ) : null}
 
         {/* Side Navigation Buttons - Left */}
         <button
