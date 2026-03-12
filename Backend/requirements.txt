@@ -19,4 +19,5 @@ alembic
 google-cloud-storage
 argon2-cffi
 pymupdf
+uvicorn[standard]
 
