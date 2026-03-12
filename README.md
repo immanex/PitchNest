@@ -32,6 +32,16 @@ The platform simulates a realistic investor meeting where multiple AI panelists 
 - **User Auth** – Sign up, login, email verification, password reset
 - **Profile Setup** – Founder/startup profiles and AI panel preference configuration
 - **Real-Time Audio Interaction** – Low-latency voice communication enabling natural conversation with AI investors
+
+### AI Voice (Google free voice)
+
+PitchNest uses the **browser Web Speech API** for AI voice playback. On Chrome (and many Chromium-based browsers), this typically includes **Google voices** (e.g. “Google US English”), which are **free** and don’t require any API keys.
+
+- **Enable**: In the Live Pitch Room, click the **Voice** toggle (speaker icon) to hear the AI Judge.
+- **Low waiting time**: The AI speaks **incrementally while the response streams**, rather than waiting for the entire response to finish.
+- **Not too long**: Spoken output is automatically **trimmed** (first couple sentences, capped length) so it doesn’t ramble.
+
+Note: Available voices vary by OS/browser. If a Google voice isn’t available, PitchNest falls back to another English voice.
   
 ---
 
@@ -74,7 +84,7 @@ The platform simulates a realistic investor meeting where multiple AI panelists 
 
 ```bash
 git clone <your-repo-url>
-cd PitchNest-3
+cd PitchNest-4
 ```
 
 2. Start all services:
@@ -155,7 +165,7 @@ Frontend runs at http://localhost:5173. Configure the API base URL if needed (e.
 ## Project Structure
 
 ```
-PitchNest-3/
+PitchNest-4/
 ├── Backend/
 │   ├── api/           # Auth, onboarding, dashboard, socket, AI routes
 │   ├── ai/            # Gemini integration, judge logic

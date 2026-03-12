@@ -1,5 +1,5 @@
 // LivePitchRoom.tsx
-import { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import {
   Video,
@@ -83,6 +83,30 @@ const SENTIMENT_COLORS: Record<string, string> = {
   NEGATIVE: "text-red-400",
 };
 
+const TTS_LANG = "en-US";
+const TTS_MAX_CHARS = 420;
+const TTS_MAX_SENTENCES = 2;
+const TTS_STREAM_FLUSH_MS = 650;
+const TTS_STREAM_SPEAK_MIN_CHARS = 120;
+
+function normalizeWhitespace(text: string) {
+  return (text || "").replace(/\s+/g, " ").trim();
+}
+
+function trimToSentences(text: string, maxSentences: number) {
+  const t = normalizeWhitespace(text);
+  if (!t) return "";
+  const parts = t.split(/(?<=[.!?])\s+/);
+  const picked = parts.slice(0, Math.max(1, maxSentences)).join(" ");
+  return picked || t;
+}
+
+function limitSpokenText(text: string) {
+  const t = trimToSentences(text, TTS_MAX_SENTENCES);
+  if (t.length <= TTS_MAX_CHARS) return t;
+  return t.slice(0, TTS_MAX_CHARS).replace(/\s+\S*$/, "").trimEnd() + "…";
+}
+
 export default function LivePitchRoom() {
   useTitle("Live Pitch Room");
 
@@ -134,6 +158,13 @@ export default function LivePitchRoom() {
   const [isVoiceOn, setIsVoiceOn] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const speechSynthesisRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const voicesRef = useRef<SpeechSynthesisVoice[]>([]);
+  const preferredVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
+  const isVoiceOnRef = useRef(false);
+  const ttsStreamBufferRef = useRef<string>("");
+  const ttsStreamFlushTimerRef = useRef<number | null>(null);
+  const ttsDidStreamSpeakRef = useRef(false);
+  const isAiStreamingRef = useRef(false);
 
   const iceCandidateBuffer = useRef<RTCIceCandidateInit[]>([]);
 
@@ -216,6 +247,95 @@ export default function LivePitchRoom() {
     });
     setPrevScores(scores);
   }, [scores]);
+
+  useEffect(() => {
+    isVoiceOnRef.current = isVoiceOn;
+  }, [isVoiceOn]);
+
+  // ─── TTS voice selection (prefer Google voice when available) ───
+  useEffect(() => {
+    if (!("speechSynthesis" in window)) return;
+
+    const pickPreferredVoice = () => {
+      const voices = window.speechSynthesis.getVoices() || [];
+      voicesRef.current = voices;
+
+      const isLangMatch = (v: SpeechSynthesisVoice) =>
+        (v.lang || "").toLowerCase().startsWith("en");
+
+      const google =
+        voices.find(
+          (v) =>
+            isLangMatch(v) &&
+            /google/i.test(v.name || "") &&
+            /female|natural|en/i.test(v.name || ""),
+        ) ||
+        voices.find((v) => isLangMatch(v) && /google/i.test(v.name || "")) ||
+        voices.find((v) => (v.lang || "").toLowerCase() === TTS_LANG.toLowerCase()) ||
+        voices.find(isLangMatch) ||
+        null;
+
+      preferredVoiceRef.current = google;
+    };
+
+    pickPreferredVoice();
+    window.speechSynthesis.onvoiceschanged = pickPreferredVoice;
+    return () => {
+      try {
+        if (window.speechSynthesis.onvoiceschanged === pickPreferredVoice) {
+          window.speechSynthesis.onvoiceschanged = null;
+        }
+      } catch {}
+    };
+  }, []);
+
+  const stopTts = useCallback(() => {
+    if (!("speechSynthesis" in window)) return;
+    try {
+      window.speechSynthesis.cancel();
+    } catch {}
+    speechSynthesisRef.current = null;
+    ttsStreamBufferRef.current = "";
+    ttsDidStreamSpeakRef.current = false;
+    isAiStreamingRef.current = false;
+    if (ttsStreamFlushTimerRef.current) {
+      window.clearTimeout(ttsStreamFlushTimerRef.current);
+      ttsStreamFlushTimerRef.current = null;
+    }
+  }, []);
+
+  const speakShort = useCallback((rawText: string) => {
+      if (!isVoiceOnRef.current) return;
+      if (!("speechSynthesis" in window)) return;
+      const text = limitSpokenText(rawText);
+      if (!text) return;
+
+      try {
+        // Keep things snappy: don't allow a long queue to build up.
+        // If we're already speaking, cancel so the next segment doesn't get delayed.
+        if (window.speechSynthesis.speaking) window.speechSynthesis.cancel();
+      } catch {}
+
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = TTS_LANG;
+      u.rate = 1.02;
+      u.pitch = 1;
+      if (preferredVoiceRef.current) u.voice = preferredVoiceRef.current;
+      speechSynthesisRef.current = u;
+      try {
+        window.speechSynthesis.speak(u);
+      } catch {}
+    }, []);
+
+  const flushTtsStreamBuffer = useCallback((): boolean => {
+    const buffered = ttsStreamBufferRef.current;
+    const segment = normalizeWhitespace(buffered);
+    if (!segment) return false;
+    ttsStreamBufferRef.current = "";
+    ttsDidStreamSpeakRef.current = true;
+    speakShort(segment);
+    return true;
+  }, [speakShort]);
 
   // ─── Camera / stream ───
   const startLocalStream = async (includeAudio = true) => {
@@ -604,12 +724,58 @@ export default function LivePitchRoom() {
         }
 
         if (data.action === "ai-response-chunk") {
-          setStreamingMessage((prev) => (prev || "") + (data.chunk || ""));
+          const chunk = data.chunk || "";
+          setStreamingMessage((prev) => (prev || "") + chunk);
+
+          // Low-latency TTS: speak incrementally while streaming.
+          if (
+            isVoiceOnRef.current &&
+            data.speaker === "AI Judge" &&
+            chunk &&
+            "speechSynthesis" in window
+          ) {
+            if (!isAiStreamingRef.current) {
+              // New AI response stream; clear any previous leftovers.
+              stopTts();
+              ttsDidStreamSpeakRef.current = false;
+              isAiStreamingRef.current = true;
+            }
+            ttsStreamBufferRef.current += chunk;
+
+            const buf = ttsStreamBufferRef.current;
+            const hasSentenceEnd = /[.!?]\s*$/.test(buf) || /[.!?][)\]"']\s*$/.test(buf);
+            const shouldSpeak =
+              hasSentenceEnd || normalizeWhitespace(buf).length >= TTS_STREAM_SPEAK_MIN_CHARS;
+
+            if (shouldSpeak) {
+              // flush soon to allow a couple more chars to arrive
+              if (ttsStreamFlushTimerRef.current) {
+                window.clearTimeout(ttsStreamFlushTimerRef.current);
+              }
+              ttsStreamFlushTimerRef.current = window.setTimeout(() => {
+                ttsStreamFlushTimerRef.current = null;
+                flushTtsStreamBuffer();
+              }, 120);
+            } else {
+              // don't wait forever for punctuation
+              if (!ttsStreamFlushTimerRef.current) {
+                ttsStreamFlushTimerRef.current = window.setTimeout(() => {
+                  ttsStreamFlushTimerRef.current = null;
+                  flushTtsStreamBuffer();
+                }, TTS_STREAM_FLUSH_MS);
+              }
+            }
+          }
         }
 
         if (data.action === "send-message") {
           setStreamingMessage(null);
           const text = data.text || data.content;
+          // Only end the AI streaming state when the AI Judge's final message arrives.
+          // User/other messages can arrive while the AI is still streaming chunks.
+          if (data.speaker === "AI Judge") {
+            isAiStreamingRef.current = false;
+          }
           setTranscript((prev) => [
             ...prev,
             {
@@ -621,19 +787,27 @@ export default function LivePitchRoom() {
               }),
             },
           ]);
-          // TTS: speak AI response when voice is on
-          if (
-            isVoiceOn &&
-            data.speaker === "AI Judge" &&
-            text &&
-            "speechSynthesis" in window
-          ) {
-            window.speechSynthesis.cancel();
-            const u = new SpeechSynthesisUtterance(text);
-            u.rate = 0.95;
-            u.pitch = 1;
-            speechSynthesisRef.current = u;
-            window.speechSynthesis.speak(u);
+          // TTS: if we already spoke while streaming, just flush the remainder.
+          // Otherwise, speak a short version of the final response.
+          if (isVoiceOnRef.current && data.speaker === "AI Judge" && text) {
+            if (ttsStreamFlushTimerRef.current) {
+              window.clearTimeout(ttsStreamFlushTimerRef.current);
+              ttsStreamFlushTimerRef.current = null;
+            }
+
+            if (ttsDidStreamSpeakRef.current) {
+              const spokeRemainder = flushTtsStreamBuffer();
+              // If nothing was left to flush, fall back to speaking a short final summary.
+              // This avoids cases where streaming speech occurred but the final message
+              // arrives with an empty buffer (e.g. timer flushed earlier).
+              if (!spokeRemainder) speakShort(text);
+            } else {
+              speakShort(text);
+            }
+
+            // Reset per-message streaming TTS state once the final AI message is handled.
+            ttsDidStreamSpeakRef.current = false;
+            ttsStreamBufferRef.current = "";
           }
         }
 
@@ -731,12 +905,22 @@ export default function LivePitchRoom() {
     socket.onerror = () => setConnectionStatus("disconnected");
 
     return () => {
+      // Ensure TTS is fully cleaned up when leaving/reconnecting rooms.
+      stopTts();
       try {
         socket.close();
       } catch {}
       socketRef.current = null;
     };
-  }, [roomId, token, createAnswer, setRemoteAnswer, peer, isVoiceOn]);
+  }, [
+    roomId,
+    token,
+    BaseUrl,
+    createAnswer,
+    setRemoteAnswer,
+    peer,
+    stopTts,
+  ]);
 
   // ─── Fetch chat history ───
   useEffect(() => {
@@ -873,9 +1057,14 @@ export default function LivePitchRoom() {
   // Cancel TTS when user sends a message (interruption)
   useEffect(() => {
     if (chatMessage && "speechSynthesis" in window) {
-      window.speechSynthesis.cancel();
+      stopTts();
     }
-  }, [chatMessage]);
+  }, [chatMessage, stopTts]);
+
+  // Stop TTS immediately when toggled off
+  useEffect(() => {
+    if (!isVoiceOn) stopTts();
+  }, [isVoiceOn, stopTts]);
 
   //handle pdf view
 
