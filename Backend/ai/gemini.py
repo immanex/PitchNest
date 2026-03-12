@@ -175,8 +175,8 @@ Respond with exactly this JSON structure:
 
     if _gemini_pro:
         model = _gemini_pro
-        resp = model1(prompt)
-        raw = (resp["content"] or "").strip()
+        resp = model.generate_content(prompt)
+        raw = (resp.text or "").strip()
     else:
         # Fallback: simple heuristic if no Gemini
         wc = len(transcript.split())
