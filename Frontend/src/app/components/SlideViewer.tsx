@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
 import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Rss } from "lucide-react";
 
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
@@ -18,13 +18,18 @@ const PitchSlides: React.FC<PitchSlidesProps> = ({ pdfUrl }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [pdfFile, setPdfFile] = useState<Blob | null>(null);
   const [error, setError] = useState<string | null>(null);
+   const BaseUrl = import.meta.env.VITE_BASE_URL || "http://localhost:8000";
 
   // Fetch PDF from authenticated URL
   useEffect(() => {
     const fetchPdf = async () => {
       try {
         setIsLoading(true);
-        const response = await fetch(pdfUrl);
+        console.log(pdfUrl)
+        const response = await fetch(
+          `${BaseUrl}/api/room/pdf-proxy?url=${pdfUrl}`,
+        );
+        console.log("response",response);
         if (!response.ok) {
           throw new Error(`Failed to fetch PDF: ${response.status}`);
         }
@@ -103,7 +108,9 @@ const PitchSlides: React.FC<PitchSlidesProps> = ({ pdfUrl }) => {
       {error && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm z-20">
           <div className="flex flex-col items-center gap-3 bg-red-900/40 border border-red-500/50 px-6 py-4 rounded-lg">
-            <p className="text-red-400 text-sm font-medium">Error loading PDF</p>
+            <p className="text-red-400 text-sm font-medium">
+              Error loading PDF
+            </p>
             <p className="text-red-300/70 text-xs">{error}</p>
           </div>
         </div>
@@ -116,7 +123,9 @@ const PitchSlides: React.FC<PitchSlidesProps> = ({ pdfUrl }) => {
             file={pdfFile}
             onLoadSuccess={onDocumentLoadSuccess}
             loading={<div className="text-white/40">Loading PDF...</div>}
-            error={<div className="text-red-400 text-sm">Error loading PDF</div>}
+            error={
+              <div className="text-red-400 text-sm">Error loading PDF</div>
+            }
             className="flex justify-center w-full h-full"
           >
             <Page

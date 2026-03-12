@@ -6,6 +6,7 @@ from fastapi import (
     UploadFile,
     File,
     Form,
+   Response, HTTPException
 )
 
 from typing import Dict, List, Annotated
@@ -16,7 +17,6 @@ from concurrent.futures import ThreadPoolExecutor
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
-
 from db.database import AsyncSessionLocal, get_db
 from db.models import Pitch, User, Room, AIRecommendation
 from api.deps import get_current_active_user, get_current_user, get_user_from_token
@@ -30,6 +30,12 @@ from utils.session_manager import store_session, get_session_prompt, delete_sess
 from ai.gemini import _get_persona_prompt, build_system_prompt
 from google.cloud import storage
 import os
+import requests
+from io import BytesIO
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 router = APIRouter(prefix="/room", tags=["room"])
 BUCKET_NAME = "pitchnest-media"
@@ -178,6 +184,27 @@ async def create_room(
     await db.commit()
 
     return {"room_id": room_id, "pitch_id": pitch.id}
+
+
+@router.get("/pdf-proxy")
+async def get_pdf_proxy(url: str):
+
+    try:
+        print("Fetching:", url)
+
+        r = requests.get(url, timeout=30)
+
+        if r.status_code != 200:
+            raise HTTPException(
+                status_code=r.status_code,
+                detail=f"Failed to fetch PDF: {r.status_code}",
+            )
+
+        return Response(content=r.content, media_type="application/pdf")  # ← raw bytes
+
+    except Exception as e:
+        print("❌ Unexpected error:", e)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.put("/end/{room_id}")
@@ -427,7 +454,6 @@ async def websocket_room(
                     "".join(ai_response_parts).strip()
                     or "I'd like to hear more about your pitch."
                 )
-                
 
                 # save AI message
                 async with AsyncSessionLocal() as db:
