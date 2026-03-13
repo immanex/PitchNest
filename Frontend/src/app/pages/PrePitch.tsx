@@ -142,6 +142,13 @@ export default function PrePitchSetup() {
   const [experienceLevel, setExperienceLevel] = useState<string>("First-time Founder");
   const [investorType, setInvestorType] = useState<string>("Seed Stage - Venture Capital");
   const [loading, setLoading] = useState(false);
+  const [panelSize, setPanelSize] = useState<number>(() => {
+    const stored = typeof window !== "undefined"
+      ? window.localStorage.getItem("panelSize")
+      : null;
+    const parsed = stored ? parseInt(stored, 10) : NaN;
+    return Number.isFinite(parsed) && parsed >= 1 && parsed <= 3 ? parsed : 3;
+  });
   const fileRef = useRef<HTMLInputElement>(null);
 
   /* ── THEME ── */
@@ -167,7 +174,6 @@ export default function PrePitchSetup() {
     risk < 30 ? "Conservative" : risk < 60 ? "Balanced" : risk < 85 ? "Growth Oriented" : "High Risk";
 
   async function handlePitchSelection() {
-    
     const formData = new FormData();
     if(!file) return alert("Plese Add Pitch deck, {right side of screen }")
     setLoading(true);
@@ -184,8 +190,10 @@ export default function PrePitchSetup() {
     formData.append("risk_appetite", String(risk));
     formData.append("camera_enabled", String(camera));
     formData.append("mic_enabled", String(mic));
+    formData.append("panel_size", String(panelSize));
 
     localStorage.setItem("selectedMode", mode);
+    localStorage.setItem("panelSize", String(panelSize));
     console.log(formData)
 
 
@@ -1306,6 +1314,40 @@ export default function PrePitchSetup() {
                     <span style={{ fontSize: 10, color: t.sliderTickColor }}>High Risk</span>
                   </div>
                 </div>
+
+                {/* Panel size: Solo / Duo / Full Panel */}
+                <div className="slider-wrap" style={{ marginTop: 16, marginBottom: 0 }}>
+                  <div className="slider-header">
+                    <span className="slider-label">AI Panel Size</span>
+                  </div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    {[1, 2, 3].map((size) => {
+                      const isActive = panelSize === size;
+                      const label = size === 1 ? "Solo" : size === 2 ? "Duo" : "Full Panel";
+                      return (
+                        <button
+                          key={size}
+                          type="button"
+                          onClick={() => setPanelSize(size)}
+                          style={{
+                            flex: 1,
+                            padding: "8px 12px",
+                            borderRadius: 999,
+                            border: `1px solid ${isActive ? "#3b82f6" : t.inputBorder}`,
+                            background: isActive ? "rgba(59,130,246,0.15)" : t.inputBg,
+                            color: isActive ? "#e2e8f0" : t.inputColor,
+                            fontSize: 12,
+                            fontWeight: 500,
+                            cursor: "pointer",
+                            transition: "all 0.2s",
+                          }}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
 
               {/* CAMERA + MIC */}
@@ -1429,6 +1471,7 @@ export default function PrePitchSetup() {
                   {[
                     { key: "Mode", val: MODES.find(m => m.id === mode)?.title ?? mode },
                     { key: "Investor", val: INVESTOR_PERSONALITIES.find(p => p.id === investorArchetype)?.name ?? investorArchetype },
+                    { key: "Panel Size", val: panelSize === 1 ? "Solo" : panelSize === 2 ? "Duo" : "Full Panel" },
                     { key: "Industry", val: industry },
                     { key: "Startup Type", val: startupType },
                     { key: "Experience", val: experienceLevel },
