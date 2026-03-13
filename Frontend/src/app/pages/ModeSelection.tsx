@@ -46,14 +46,22 @@ const modes = [
 ];
 
 export default function ModeSelection() {
-    useTitle("Select Mode");
+  useTitle("Select Mode");
   const location = useLocation();
   const [investorArchetype, setInvestorArchetype] = useState<string>("friendly");
+  const [panelSize, setPanelSize] = useState<number>(() => {
+    const stored = typeof window !== "undefined"
+      ? window.localStorage.getItem("panelSize")
+      : null;
+    const parsed = stored ? parseInt(stored, 10) : NaN;
+    return Number.isFinite(parsed) && parsed >= 1 && parsed <= 3 ? parsed : 3;
+  });
 
   const { industry, startupType, experience } = location.state || {};
   const { user } = useUser();
   async function handlePitchSelection(modeId: string) {
     localStorage.setItem("selectedMode", modeId);
+    localStorage.setItem("panelSize", String(panelSize));
     const BaseUrl = import.meta.env.VITE_BASE_URL || "http://localhost:8000";
     let room = await fetch(`${BaseUrl}/api/room/create`, {
       method: "POST",
@@ -68,6 +76,7 @@ export default function ModeSelection() {
         experience_level: experience,
         modeId,
         investor_archetype: investorArchetype,
+        panel_size: panelSize,
       }),
     }).then((res) => res.json());
     console.log("Created room:", room);
@@ -124,24 +133,48 @@ export default function ModeSelection() {
           </p>
         </div>
 
-        {/* Investor Personality */}
-        <div className="mb-12 p-6 rounded-2xl bg-white/5 backdrop-blur-sm border border-white/10">
-          <h3 className="text-lg mb-4">Choose Investor Personality</h3>
-          <div className="flex flex-wrap gap-3">
-            {INVESTOR_PERSONALITIES.map((p) => (
-              <button
-                key={p.id}
-                onClick={() => setInvestorArchetype(p.id)}
-                className={`px-4 py-2 rounded-xl border transition-all ${
-                  investorArchetype === p.id
-                    ? "bg-[#3B82F6]/30 border-[#3B82F6] text-white"
-                    : "border-white/10 hover:bg-white/5 text-gray-400"
-                }`}
-              >
-                <span className="font-medium">{p.name}</span>
-                <span className="block text-xs opacity-80">{p.desc}</span>
-              </button>
-            ))}
+        {/* Investor Personality & Panel Size */}
+        <div className="mb-12 grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 p-6 rounded-2xl bg-white/5 backdrop-blur-sm border border-white/10">
+            <h3 className="text-lg mb-4">Choose Investor Personality</h3>
+            <div className="flex flex-wrap gap-3">
+              {INVESTOR_PERSONALITIES.map((p) => (
+                <button
+                  key={p.id}
+                  onClick={() => setInvestorArchetype(p.id)}
+                  className={`px-4 py-2 rounded-xl border transition-all ${
+                    investorArchetype === p.id
+                      ? "bg-[#3B82F6]/30 border-[#3B82F6] text-white"
+                      : "border-white/10 hover:bg-white/5 text-gray-400"
+                  }`}
+                >
+                  <span className="font-medium">{p.name}</span>
+                  <span className="block text-xs opacity-80">{p.desc}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="p-6 rounded-2xl bg-white/5 backdrop-blur-sm border border-white/10">
+            <h3 className="text-lg mb-2">AI Panel Size</h3>
+            <p className="text-xs text-gray-400 mb-4">
+              Choose how many AI investors join your pitch.
+            </p>
+            <div className="flex gap-2">
+              {[1, 2, 3].map((size) => (
+                <button
+                  key={size}
+                  onClick={() => setPanelSize(size)}
+                  className={`flex-1 px-3 py-2 rounded-xl border text-sm transition-all ${
+                    panelSize === size
+                      ? "bg-[#3B82F6]/30 border-[#3B82F6] text-white"
+                      : "border-white/10 text-gray-300 hover:bg-white/5"
+                  }`}
+                >
+                  {size === 1 ? "Solo" : size === 2 ? "Duo" : "Full Panel"}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
