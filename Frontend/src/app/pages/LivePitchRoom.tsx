@@ -88,6 +88,9 @@ const TTS_MAX_CHARS = 420;
 const TTS_MAX_SENTENCES = 2;
 const TTS_STREAM_FLUSH_MS = 650;
 const TTS_STREAM_SPEAK_MIN_CHARS = 120;
+const INTRO_PITCH_SECONDS = 180; // ~3 minutes before AI starts active questioning
+const AI_WELCOME_LINE =
+  "Welcome to the PitchNest Room. Please tell us about your business in the next 3 minutes.";
 
 function normalizeWhitespace(text: string) {
   return (text || "").replace(/\s+/g, " ").trim();
@@ -170,6 +173,8 @@ export default function LivePitchRoom() {
   const ttsStreamFlushTimerRef = useRef<number | null>(null);
   const ttsDidStreamSpeakRef = useRef(false);
   const isAiStreamingRef = useRef(false);
+  const isIntroPhaseRef = useRef(true);
+  const hasPlayedIntroRef = useRef(false);
 
   const iceCandidateBuffer = useRef<RTCIceCandidateInit[]>([]);
 
@@ -197,6 +202,7 @@ export default function LivePitchRoom() {
     confidence: 88,
     marketFit: 76,
   });
+  const [isIntroPhase, setIsIntroPhase] = useState(true);
 
   // updating matrics on reload
   useEffect(() => {
@@ -245,6 +251,16 @@ export default function LivePitchRoom() {
     }, 1000);
     return () => clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    if (isIntroPhase && elapsedTime >= INTRO_PITCH_SECONDS) {
+      setIsIntroPhase(false);
+    }
+  }, [elapsedTime, isIntroPhase]);
+
+  useEffect(() => {
+    isIntroPhaseRef.current = isIntroPhase;
+  }, [isIntroPhase]);
 
   const formatTime = (s: number) => {
     const h = Math.floor(s / 3600);
@@ -357,6 +373,10 @@ export default function LivePitchRoom() {
     speakShort(segment);
     return true;
   }, [speakShort]);
+
+  const handleStartInteractivePhase = useCallback(() => {
+    setIsIntroPhase(false);
+  }, []);
 
   //sending voice to ai
   const startVoiceRecognition = () => {
@@ -806,6 +826,10 @@ export default function LivePitchRoom() {
         }
 
         if (data.action === "ai-response-chunk") {
+          if (isIntroPhaseRef.current && data.speaker === "AI Judge") {
+            // During intro pitch phase the AI silently observes – no spoken or text interruptions.
+            return;
+          }
           const chunk = data.chunk || "";
           setStreamingMessage((prev) => (prev || "") + chunk);
 
@@ -853,6 +877,11 @@ export default function LivePitchRoom() {
         }
 
         if (data.action === "send-message") {
+          const isAiJudge = data.speaker === "AI Judge";
+          if (isIntroPhaseRef.current && isAiJudge) {
+            // Suppress visible AI responses during the intro pitch window.
+            return;
+          }
           setStreamingMessage(null);
           const text = data.text || data.content;
           // Only end the AI streaming state when the AI Judge's final message arrives.
@@ -1002,6 +1031,32 @@ export default function LivePitchRoom() {
       socketRef.current = null;
     };
   }, [roomId, token, BaseUrl, createAnswer, setRemoteAnswer, peer, stopTts]);
+
+  // ─── AI opening line once connected ───
+  useEffect(() => {
+    if (
+      connectionStatus === "connected" &&
+      !hasPlayedIntroRef.current &&
+      user
+    ) {
+      hasPlayedIntroRef.current = true;
+      const welcomeText = AI_WELCOME_LINE;
+      setTranscript((prev) => [
+        ...prev,
+        {
+          speaker: "AI Judge",
+          text: welcomeText,
+          time: new Date().toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
+        },
+      ]);
+      if (isVoiceOnRef.current) {
+        speakShort(welcomeText);
+      }
+    }
+  }, [connectionStatus, user, speakShort]);
 
   // ─── Fetch chat history ───
   useEffect(() => {
@@ -1158,6 +1213,18 @@ export default function LivePitchRoom() {
     setIsScreenView(true);
     setIsPdfView(false);
   }
+  const panelSize =
+    typeof window !== "undefined"
+      ? Math.min(
+          INVESTOR_PERSONAS.length,
+          Math.max(
+            1,
+            parseInt(window.localStorage.getItem("panelSize") || "3", 10),
+          ),
+        )
+      : INVESTOR_PERSONAS.length;
+  const activeInvestorPersonas = INVESTOR_PERSONAS.slice(0, panelSize);
+
   const overallScore = Math.round(
     (scores.clarity + scores.confidence + scores.marketFit) / 3,
   );
@@ -1768,7 +1835,7 @@ export default function LivePitchRoom() {
 
             {isAIExpanded && (
               <div className="p-4 space-y-3">
-                {INVESTOR_PERSONAS.map((p) => (
+                {activeInvestorPersonas.map((p) => (
                   <div key={p.id} className="flex items-center gap-3">
                     <div
                       className={`w-7 h-7 rounded-lg ${p.avatarBg} flex items-center justify-center shrink-0`}
@@ -1816,6 +1883,16 @@ export default function LivePitchRoom() {
       {/* ─── BOTTOM BAR ─── */}
       <div className="glass-heavy border-t border-white/5 px-6 py-3 flex items-center gap-4">
         <div className="flex items-center gap-5 flex-1">
+          <div className="flex flex-col text-xs text-white/60 mr-4">
+            <span className="font-['Space_Grotesk'] tracking-wide uppercase">
+              {isIntroPhase ? "Intro Pitch Phase" : "Interactive Q&A"}
+            </span>
+            <span className="text-white/40">
+              {isIntroPhase
+                ? "You have ~3 minutes to pitch. The AI panel is listening and will respond after you finish."
+                : "AI investors are now free to ask questions and react in real time."}
+            </span>
+          </div>
           {[
             {
               label: "Clarity",
@@ -1850,6 +1927,14 @@ export default function LivePitchRoom() {
         </div>
 
         <div className="flex items-center gap-2">
+          {isIntroPhase && (
+            <button
+              onClick={handleStartInteractivePhase}
+              className="btn-control px-3 py-2 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs mr-2"
+            >
+              I'm done pitching – start AI questions
+            </button>
+          )}
           <button
             onClick={toggleVoiceInput}
             className={`btn-control p-2 rounded-xl transition-colors ${
