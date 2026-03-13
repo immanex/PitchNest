@@ -198,6 +198,20 @@ export default function LivePitchRoom() {
     marketFit: 76,
   });
 
+  // updating matrics on reload
+  useEffect(() => {
+    const stored = localStorage.getItem("metrics");
+    console.log("Loading metrics:", stored);
+
+    if (stored) {
+      try {
+        setScores(JSON.parse(stored));
+      } catch (e) {
+        console.error("Failed to parse metrics from localStorage", e);
+      }
+    }
+  }, []);
+
   // ─── Auto-scroll chat ───
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -346,19 +360,19 @@ export default function LivePitchRoom() {
 
   //sending voice to ai
   const startVoiceRecognition = () => {
-    console.log("entered")
+    console.log("entered");
     if (!("webkitSpeechRecognition" in window)) {
       console.warn("Speech recognition not supported");
       return;
     }
-    console.log("webkit detected")
+    console.log("webkit detected");
 
     const recognition = new (window as any).webkitSpeechRecognition();
 
     recognition.continuous = true;
     recognition.interimResults = true;
     recognition.lang = "en-US";
-    console.log("final step")
+    console.log("final step");
 
     recognition.onresult = (event: any) => {
       const result = event.results[event.results.length - 1];
@@ -374,7 +388,7 @@ export default function LivePitchRoom() {
         );
       }
     };
-    console.log("sended")
+    console.log("sended");
 
     recognition.onerror = (err: any) => {
       console.error("Speech recognition error:", err);
@@ -385,7 +399,7 @@ export default function LivePitchRoom() {
   //calling it when voice is enabled
   useEffect(() => {
     if (isVoiceOn) {
-      console.log("listening..")
+      console.log("listening..");
       startVoiceRecognition();
     }
   }, [isVoiceOn]);
@@ -967,7 +981,10 @@ export default function LivePitchRoom() {
           }
         }
 
-        if (data.type === "SCORE_UPDATE") setScores(data.scores);
+        if (data.type === "SCORE_UPDATE" && data.scores) {
+          setScores(data.scores);
+          localStorage.setItem("metrics", JSON.stringify(data.scores));
+        }
       } catch (err) {
         console.error("Socket parse error:", err);
       }
@@ -1124,7 +1141,7 @@ export default function LivePitchRoom() {
       stopTts();
     }
   }, [chatMessage, stopTts]);
-  console.log("voice", isVoiceOn)
+  console.log("voice", isVoiceOn);
 
   // Stop TTS immediately when toggled off
   useEffect(() => {

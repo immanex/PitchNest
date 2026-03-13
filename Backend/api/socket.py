@@ -23,7 +23,11 @@ from db.models import Pitch, User, Room, AIRecommendation
 from api.deps import get_current_active_user, get_current_user, get_user_from_token
 from schemas.socket import RoomCreate
 from db.models import User, ChatMessage
-from ai.gemini import generate_gemini_response_stream, evaluate_pitch_with_gemini
+from ai.gemini import (
+    generate_gemini_response_stream,
+    evaluate_pitch_with_gemini,
+    evaluate_pitch_segment,
+)
 from google.cloud import storage
 import os
 from utils.pdf_parser import extract_pitch_deck_text
@@ -156,7 +160,7 @@ async def create_room(
 
     room_id = current_user.id + "-" + str(uuid.uuid4())[:8]
 
-    url =  await upload_file_to_gcs(file)
+    url = await upload_file_to_gcs(file)
 
     print("Uploaded file to:", url)
 
@@ -383,6 +387,7 @@ async def websocket_room(
                     ),
                     room_id,
                 )
+                
 
                 # Fetch investor archetype and conversation history for dynamic questioning
                 investor_archetype = None
@@ -408,6 +413,12 @@ async def websocket_room(
                         }
                         for c in prev_chats
                     ]
+                scores = evaluate_pitch_segment(conversation_history)
+
+                await manager.broadcast(
+                    json.dumps({"type": "SCORE_UPDATE", "scores": scores}),
+                    room_id,
+                )
 
                 # Stream AI response for faster perceived latency (producer in thread)
                 loop = asyncio.get_event_loop()
@@ -423,7 +434,7 @@ async def websocket_room(
                             conversation_history,
                         ):
                             loop.call_soon_threadsafe(chunk_queue.put_nowait, chunk)
-                            
+
                     except Exception:
                         # Ensure the consumer doesn't hang if the producer fails mid-stream.
                         loop.call_soon_threadsafe(

@@ -144,7 +144,6 @@ def generate_gemini_response_stream(
         if chunk.text:
             full_text.append(chunk.text)
             yield chunk.text
-    
 
 
 def evaluate_pitch_with_gemini(transcript: str) -> dict[str, Any]:
@@ -226,3 +225,47 @@ Respond with exactly this JSON structure:
         "suggestions": list(data.get("suggestions", [])),
     }
 
+
+def evaluate_pitch_segment(history):
+    prompt = f"""
+Evaluate this startup pitch segment.
+
+Pitch: {history}
+
+
+Respond with exactly this JSON structure:
+{{
+  "overall_score": <0-100 float>,
+  "clarity": <0-100 float>,
+  "communication": <0-100 float>,
+  "market_fit": <0-100 float>,
+  "confidence":<0-100 float>
+
+}}
+"""
+    if _gemini_pro:
+        model = _gemini_pro
+        resp = model.generate_content(prompt)
+        raw = (resp.text or "").strip()
+
+    raw = re.sub(r"^```(?:json)?\s*", "", raw)
+    raw = re.sub(r"\s*```\s*$", "", raw)
+
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        return {
+            "overall_score": 70,
+            "clarity": 70,
+            "communication": 70,
+            "marketFit": 70,
+            "confidence": 70,
+        }
+
+    return {
+        "overall_score": float(data.get("overall_score", 70)),
+        "clarity": float(data.get("clarity", 70)),
+        "communication": float(data.get("communication", 70)),
+        "marketFit": float(data.get("market_fit", 70)),
+        "confidence": float(data.get("confidence", 70)),
+    }
