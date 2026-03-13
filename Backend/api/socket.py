@@ -6,7 +6,8 @@ from fastapi import (
     UploadFile,
     File,
     Form,
-   Response, HTTPException
+    Response,
+    HTTPException,
 )
 
 from typing import Dict, List, Annotated
@@ -155,7 +156,7 @@ async def create_room(
 
     room_id = current_user.id + "-" + str(uuid.uuid4())[:8]
 
-    url = await upload_file_to_gcs(file)
+    url =  await upload_file_to_gcs(file)
 
     print("Uploaded file to:", url)
 
@@ -357,7 +358,7 @@ async def websocket_room(
             data = await websocket.receive_text()
             message_data = json.loads(data)
 
-            if message_data.get("action") == "send-message":
+            if message_data.get("action") in ["send-message", "user-message"]:
 
                 # save user message
                 async with AsyncSessionLocal() as db:
@@ -422,6 +423,7 @@ async def websocket_room(
                             conversation_history,
                         ):
                             loop.call_soon_threadsafe(chunk_queue.put_nowait, chunk)
+                            
                     except Exception:
                         # Ensure the consumer doesn't hang if the producer fails mid-stream.
                         loop.call_soon_threadsafe(

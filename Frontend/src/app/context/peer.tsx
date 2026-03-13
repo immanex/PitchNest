@@ -12,7 +12,7 @@ interface PeerContextType {
   isConnected: boolean;
   createOffer: () => Promise<RTCSessionDescriptionInit>;
   createAnswer: (
-    offer: RTCSessionDescriptionInit
+    offer: RTCSessionDescriptionInit,
   ) => Promise<RTCSessionDescriptionInit>;
   setRemoteAnswer: (answer: RTCSessionDescriptionInit) => Promise<void>;
 }
@@ -34,7 +34,7 @@ export const PeerProvider: React.FC<{ children: ReactNode }> = ({
           { urls: "stun:stun4.l.google.com:19302" },
         ],
       }),
-    []
+    [],
   );
 
   // ✅ FIX: Monitor connection states
@@ -50,19 +50,36 @@ export const PeerProvider: React.FC<{ children: ReactNode }> = ({
     const onSignalingStateChange = () => {
       console.log("📡 Signaling State:", peer.signalingState);
     };
+    const onIceGatheringStateChange = () => {
+      console.log("❄️ ICE Gathering:", peer.iceGatheringState);
+    };
 
     const onTrack = (e: RTCTrackEvent) => {
       console.log("🎥 Track received:", e.track.kind);
     };
 
     peer.addEventListener("connectionstatechange", onConnectionStateChange);
-    peer.addEventListener("iceconnectionstatechange", onIceConnectionStateChange);
+    peer.addEventListener(
+      "iceconnectionstatechange",
+      onIceConnectionStateChange,
+    );
+    peer.addEventListener("icegatheringstatechange", onIceGatheringStateChange);
     peer.addEventListener("signalingstatechange", onSignalingStateChange);
     peer.addEventListener("track", onTrack);
 
     return () => {
-      peer.removeEventListener("connectionstatechange", onConnectionStateChange);
-      peer.removeEventListener("iceconnectionstatechange", onIceConnectionStateChange);
+      peer.removeEventListener(
+        "connectionstatechange",
+        onConnectionStateChange,
+      );
+      peer.removeEventListener(
+        "iceconnectionstatechange",
+        onIceConnectionStateChange,
+      );
+      peer.removeEventListener(
+        "icegatheringstatechange",
+        onIceGatheringStateChange,
+      );
       peer.removeEventListener("signalingstatechange", onSignalingStateChange);
       peer.removeEventListener("track", onTrack);
     };
@@ -79,7 +96,10 @@ export const PeerProvider: React.FC<{ children: ReactNode }> = ({
     peer.addEventListener("connectionstatechange", handleConnectionStateChange);
 
     return () => {
-      peer.removeEventListener("connectionstatechange", handleConnectionStateChange);
+      peer.removeEventListener(
+        "connectionstatechange",
+        handleConnectionStateChange,
+      );
     };
   }, [peer]);
 
@@ -91,11 +111,11 @@ export const PeerProvider: React.FC<{ children: ReactNode }> = ({
         offerToReceiveVideo: true,
       });
       await peer.setLocalDescription(offer);
-      
+
       if (!peer.localDescription) {
         throw new Error("Failed to set local description");
       }
-      
+
       return peer.localDescription;
     } catch (error) {
       console.error("Error creating offer:", error);
@@ -105,7 +125,7 @@ export const PeerProvider: React.FC<{ children: ReactNode }> = ({
 
   // ✅ FIX: Proper answer creation with RTCSessionDescription wrapper
   async function createAnswer(
-    offer: RTCSessionDescriptionInit
+    offer: RTCSessionDescriptionInit,
   ): Promise<RTCSessionDescriptionInit> {
     try {
       // ✅ CRITICAL FIX: Wrap in RTCSessionDescription
@@ -131,7 +151,7 @@ export const PeerProvider: React.FC<{ children: ReactNode }> = ({
 
   // ✅ FIX: Proper answer setting with RTCSessionDescription wrapper
   async function setRemoteAnswer(
-    answer: RTCSessionDescriptionInit
+    answer: RTCSessionDescriptionInit,
   ): Promise<void> {
     try {
       // ✅ CRITICAL FIX: Wrap in RTCSessionDescription

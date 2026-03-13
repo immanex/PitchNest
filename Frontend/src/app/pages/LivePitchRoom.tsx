@@ -104,7 +104,12 @@ function trimToSentences(text: string, maxSentences: number) {
 function limitSpokenText(text: string) {
   const t = trimToSentences(text, TTS_MAX_SENTENCES);
   if (t.length <= TTS_MAX_CHARS) return t;
-  return t.slice(0, TTS_MAX_CHARS).replace(/\s+\S*$/, "").trimEnd() + "…";
+  return (
+    t
+      .slice(0, TTS_MAX_CHARS)
+      .replace(/\s+\S*$/, "")
+      .trimEnd() + "…"
+  );
 }
 
 export default function LivePitchRoom() {
@@ -155,7 +160,7 @@ export default function LivePitchRoom() {
   const [chatMessage, setChatMessage] = useState("");
   const [unreadCount, setUnreadCount] = useState(0);
   const [streamingMessage, setStreamingMessage] = useState<string | null>(null);
-  const [isVoiceOn, setIsVoiceOn] = useState(false);
+  const [isVoiceOn, setIsVoiceOn] = useState(true);
   const [isListening, setIsListening] = useState(false);
   const speechSynthesisRef = useRef<SpeechSynthesisUtterance | null>(null);
   const voicesRef = useRef<SpeechSynthesisVoice[]>([]);
@@ -271,7 +276,9 @@ export default function LivePitchRoom() {
             /female|natural|en/i.test(v.name || ""),
         ) ||
         voices.find((v) => isLangMatch(v) && /google/i.test(v.name || "")) ||
-        voices.find((v) => (v.lang || "").toLowerCase() === TTS_LANG.toLowerCase()) ||
+        voices.find(
+          (v) => (v.lang || "").toLowerCase() === TTS_LANG.toLowerCase(),
+        ) ||
         voices.find(isLangMatch) ||
         null;
 
@@ -305,27 +312,27 @@ export default function LivePitchRoom() {
   }, []);
 
   const speakShort = useCallback((rawText: string) => {
-      if (!isVoiceOnRef.current) return;
-      if (!("speechSynthesis" in window)) return;
-      const text = limitSpokenText(rawText);
-      if (!text) return;
+    if (!isVoiceOnRef.current) return;
+    if (!("speechSynthesis" in window)) return;
+    const text = limitSpokenText(rawText);
+    if (!text) return;
 
-      try {
-        // Keep things snappy: don't allow a long queue to build up.
-        // If we're already speaking, cancel so the next segment doesn't get delayed.
-        if (window.speechSynthesis.speaking) window.speechSynthesis.cancel();
-      } catch {}
+    try {
+      // Keep things snappy: don't allow a long queue to build up.
+      // If we're already speaking, cancel so the next segment doesn't get delayed.
+      if (window.speechSynthesis.speaking) window.speechSynthesis.cancel();
+    } catch {}
 
-      const u = new SpeechSynthesisUtterance(text);
-      u.lang = TTS_LANG;
-      u.rate = 1.02;
-      u.pitch = 1;
-      if (preferredVoiceRef.current) u.voice = preferredVoiceRef.current;
-      speechSynthesisRef.current = u;
-      try {
-        window.speechSynthesis.speak(u);
-      } catch {}
-    }, []);
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = TTS_LANG;
+    u.rate = 1.02;
+    u.pitch = 1;
+    if (preferredVoiceRef.current) u.voice = preferredVoiceRef.current;
+    speechSynthesisRef.current = u;
+    try {
+      window.speechSynthesis.speak(u);
+    } catch {}
+  }, []);
 
   const flushTtsStreamBuffer = useCallback((): boolean => {
     const buffered = ttsStreamBufferRef.current;
@@ -337,22 +344,76 @@ export default function LivePitchRoom() {
     return true;
   }, [speakShort]);
 
+  //sending voice to ai
+  const startVoiceRecognition = () => {
+    console.log("entered")
+    if (!("webkitSpeechRecognition" in window)) {
+      console.warn("Speech recognition not supported");
+      return;
+    }
+    console.log("webkit detected")
+
+    const recognition = new (window as any).webkitSpeechRecognition();
+
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = "en-US";
+    console.log("final step")
+
+    recognition.onresult = (event: any) => {
+      const result = event.results[event.results.length - 1];
+
+      if (result.isFinal) {
+        const transcript = result[0].transcript;
+
+        socketRef.current?.send(
+          JSON.stringify({
+            action: "user-message",
+            text: transcript,
+          }),
+        );
+      }
+    };
+    console.log("sended")
+
+    recognition.onerror = (err: any) => {
+      console.error("Speech recognition error:", err);
+    };
+
+    recognition.start();
+  };
+  //calling it when voice is enabled
+  useEffect(() => {
+    if (isVoiceOn) {
+      console.log("listening..")
+      startVoiceRecognition();
+    }
+  }, [isVoiceOn]);
+
   // ─── Camera / stream ───
   const startLocalStream = async (includeAudio = true) => {
     try {
+      if (myStream) {
+        myStream.getTracks().forEach((track) => track.stop());
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({
         video: true,
         audio: includeAudio,
       });
-      if (localVideoRef.current) localVideoRef.current.srcObject = stream;
+
+      if (localVideoRef.current) {
+        localVideoRef.current.srcObject = stream;
+      }
+
       stream.getTracks().forEach((track) => {
-        try {
-          peer?.addTrack(track, stream);
-        } catch {}
+        peer?.addTrack(track, stream);
       });
+
       setMyStream(stream);
       setIsVideoOn(true);
       setIsMicOn(includeAudio);
+
       return stream;
     } catch (err) {
       console.error("Error starting local stream:", err);
@@ -627,7 +688,11 @@ export default function LivePitchRoom() {
     };
   }, [peer]);
 
+  useEffect(() => {
+    startLocalStream(true);
+  }, []);
   // ─── Negotiation ───
+  const makingOffer = useRef(false);
   useEffect(() => {
     if (!peer && !createOffer) return;
     const onNegotiation = async () => {
@@ -639,6 +704,7 @@ export default function LivePitchRoom() {
         return;
       }
       try {
+        if (makingOffer.current) return;
         const offer = await (createOffer ? createOffer() : peer?.createOffer());
         const targetEmail = users.find((u) => u !== user?.email);
         socketRef.current.send(
@@ -646,6 +712,8 @@ export default function LivePitchRoom() {
         );
       } catch (err) {
         console.warn("Negotiation error:", err);
+      } finally {
+        makingOffer.current = false;
       }
     };
     peer?.addEventListener?.("negotiationneeded", onNegotiation);
@@ -743,9 +811,11 @@ export default function LivePitchRoom() {
             ttsStreamBufferRef.current += chunk;
 
             const buf = ttsStreamBufferRef.current;
-            const hasSentenceEnd = /[.!?]\s*$/.test(buf) || /[.!?][)\]"']\s*$/.test(buf);
+            const hasSentenceEnd =
+              /[.!?]\s*$/.test(buf) || /[.!?][)\]"']\s*$/.test(buf);
             const shouldSpeak =
-              hasSentenceEnd || normalizeWhitespace(buf).length >= TTS_STREAM_SPEAK_MIN_CHARS;
+              hasSentenceEnd ||
+              normalizeWhitespace(buf).length >= TTS_STREAM_SPEAK_MIN_CHARS;
 
             if (shouldSpeak) {
               // flush soon to allow a couple more chars to arrive
@@ -789,7 +859,11 @@ export default function LivePitchRoom() {
           ]);
           // TTS: if we already spoke while streaming, just flush the remainder.
           // Otherwise, speak a short version of the final response.
+          console.log(text);
+          console.log(isVoiceOnRef.current);
+          console.log(data.speaker);
           if (isVoiceOnRef.current && data.speaker === "AI Judge" && text) {
+            console.log("Speeking");
             if (ttsStreamFlushTimerRef.current) {
               window.clearTimeout(ttsStreamFlushTimerRef.current);
               ttsStreamFlushTimerRef.current = null;
@@ -815,9 +889,7 @@ export default function LivePitchRoom() {
           if (createAnswer) {
             try {
               // ✅ Wrap in RTCSessionDescription
-              const answer = await createAnswer(
-                new RTCSessionDescription(data.offer),
-              );
+              const answer = await createAnswer(data.offer);
               await flushIceCandidates();
               socketRef.current?.send(
                 JSON.stringify({
@@ -857,7 +929,7 @@ export default function LivePitchRoom() {
           if (data.answer && setRemoteAnswer) {
             try {
               // ✅ Wrap in RTCSessionDescription
-              await setRemoteAnswer(new RTCSessionDescription(data.answer));
+              await setRemoteAnswer(data.answer);
               await flushIceCandidates();
             } catch (err) {
               console.error("setRemoteAnswer error:", err);
@@ -912,15 +984,7 @@ export default function LivePitchRoom() {
       } catch {}
       socketRef.current = null;
     };
-  }, [
-    roomId,
-    token,
-    BaseUrl,
-    createAnswer,
-    setRemoteAnswer,
-    peer,
-    stopTts,
-  ]);
+  }, [roomId, token, BaseUrl, createAnswer, setRemoteAnswer, peer, stopTts]);
 
   // ─── Fetch chat history ───
   useEffect(() => {
@@ -1060,6 +1124,7 @@ export default function LivePitchRoom() {
       stopTts();
     }
   }, [chatMessage, stopTts]);
+  console.log("voice", isVoiceOn)
 
   // Stop TTS immediately when toggled off
   useEffect(() => {
@@ -1323,7 +1388,7 @@ export default function LivePitchRoom() {
             ) : isVideoOn ? (
               myStream ? (
                 <video
-                  ref={videoRef}
+                  ref={remoteVideoRef}
                   autoPlay
                   playsInline
                   muted
