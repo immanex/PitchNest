@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
   Users,
   Brain,
@@ -167,6 +167,26 @@ export default function PrePitchSetup() {
 
   const BaseUrl = import.meta.env.VITE_BASE_URL || "http://localhost:8000";
   const { user } = useUser();
+  const location = useLocation();
+
+  // Pre-fill from ModeSelection when coming from /modes
+  useEffect(() => {
+    const state = location.state as {
+      industry?: string;
+      startupType?: string;
+      experience?: string;
+      modeId?: string;
+      investorArchetype?: string;
+      panelSize?: number;
+    } | null;
+    if (!state) return;
+    if (state.industry) setIndustry(state.industry);
+    if (state.startupType) setStartupType(state.startupType);
+    if (state.experience) setExperienceLevel(state.experience);
+    if (state.modeId) setMode(state.modeId);
+    if (state.investorArchetype) setInvestorArchetype(state.investorArchetype);
+    if (state.panelSize != null && state.panelSize >= 1 && state.panelSize <= 3) setPanelSize(state.panelSize);
+  }, [location.state]);
 
   const aggressionLabel =
     aggression < 30 ? "Gentle" : aggression < 60 ? "Moderate" : aggression < 85 ? "Aggressive" : "Brutal";
@@ -175,7 +195,10 @@ export default function PrePitchSetup() {
 
   async function handlePitchSelection() {
     const formData = new FormData();
-    if(!file) return alert("Plese Add Pitch deck, {right side of screen }")
+    if (!file) {
+      alert("Please add a pitch deck (upload on the right side of the screen).");
+      return;
+    }
     setLoading(true);
     if (file) formData.append("file", file);
     formData.append("pitch_name", title || "Untitled Pitch");
@@ -204,11 +227,11 @@ export default function PrePitchSetup() {
         body: formData,
       });
       const room = await response.json();
-      localStorage.setItem("roomId", room.room_id);
       if (!response.ok) {
-        alert("Failed to create room. Please try again.");
+        alert(room?.detail || "Failed to create room. Please try again.");
         return;
       }
+      localStorage.setItem("roomId", room.room_id);
       window.location.href = "/room/" + room.room_id + "?pitchId=" + room.pitch_id;
     } catch (e) {
       alert("An error occurred. Please try again.");

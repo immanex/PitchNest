@@ -109,24 +109,33 @@ export default function MyPitches() {
     localStorage.setItem("theme", theme);
   }, [theme]);
 
-  // Fetch
-  useEffect(() => {
-    async function fetchPitches() {
-      setLoading(true);
-      try {
-        const response = await fetch(`${BaseUrl}/api/dashboard/summary`, {
-          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-        });
-        if (response.ok) {
-          const data = await response.json();
-          setPitches(data?.total_pitches ?? []);
-          setTotalScore(data?.average_score ?? 0);
-        }
-      } finally {
-        setLoading(false);
+  const fetchPitches = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch(`${BaseUrl}/api/dashboard/summary`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setPitches(data?.total_pitches ?? []);
+        setTotalScore(data?.average_score ?? 0);
       }
+    } finally {
+      setLoading(false);
     }
+  };
+
+  useEffect(() => {
     fetchPitches();
+  }, [user]);
+
+  // Refetch when window regains focus so list shows live data
+  useEffect(() => {
+    const onFocus = () => {
+      if (user) fetchPitches();
+    };
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
   }, [user]);
 
   // Delete handler

@@ -99,19 +99,29 @@ export default function Dashboard() {
     setRooms(rooms?.rooms);
   }, [rooms]);
 
-  useEffect(() => {
-    async function fetchPitches() {
-      let response = await fetch(`${BaseUrl}/api/dashboard/pitches/recent`, {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-      });
-      if (response.ok) {
-        let data = await response.json();
-        setPitches(data);
-      }
+  const fetchPitches = async () => {
+    let response = await fetch(`${BaseUrl}/api/dashboard/pitches/recent`, {
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem("token")}`,
+      },
+    });
+    if (response.ok) {
+      let data = await response.json();
+      setPitches(data);
     }
+  };
+
+  useEffect(() => {
     fetchPitches();
+  }, [user]);
+
+  // Refetch pitches when window regains focus so dashboard shows live data
+  useEffect(() => {
+    const onFocus = () => {
+      if (user) fetchPitches();
+    };
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
   }, [user]);
 
   const filteredPitches = pitches?.filter((p: Pitch) =>

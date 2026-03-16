@@ -42,29 +42,37 @@ export default function Analytics() {
     }
   }, [pitchIdParam, navigate]);
 
+  const fetchSummary = async () => {
+    if (!token) {
+      setLoading(false);
+      return;
+    }
+    try {
+      const res = await fetch(`${BaseUrl}/api/dashboard/summary`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSummary(data);
+      }
+    } catch {
+      // Fallback to empty
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    if (pitchIdParam) return; // Redirecting to pitch-detail, skip fetch
-    const fetchSummary = async () => {
-      if (!token) {
-        setLoading(false);
-        return;
-      }
-      try {
-        const res = await fetch(`${BaseUrl}/api/dashboard/summary`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setSummary(data);
-        }
-      } catch {
-        // Fallback to empty
-      } finally {
-        setLoading(false);
-      }
-    };
+    if (pitchIdParam) return;
     fetchSummary();
   }, [token, BaseUrl, pitchIdParam]);
+
+  useEffect(() => {
+    if (pitchIdParam || !token) return;
+    const onFocus = () => fetchSummary();
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [token, pitchIdParam]);
 
   const totalCount = summary?.total_pitches?.length ?? 0;
   const avgScore = summary?.average_score;

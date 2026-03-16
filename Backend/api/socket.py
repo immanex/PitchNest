@@ -289,7 +289,6 @@ async def list_rooms(
     current_user: Annotated[User, Depends(get_current_active_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    query = select(Room).where(Room.owner_id == current_user.id)
     query = select(Room).where(
         (Room.owner_id == current_user.id) & (Room.closed == False)
     )

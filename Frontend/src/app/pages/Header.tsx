@@ -1,9 +1,11 @@
-import { Search, Bell, Sun, Moon } from "lucide-react";
+import { Search, Bell, Sun, Moon, LogOut } from "lucide-react";
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { useUser } from "../context/UserContext";
 
 export default function Header() {
-  const { user } = useUser();
+  const { user, logout } = useUser();
+  const navigate = useNavigate();
 
   const [theme, setTheme] = useState(localStorage.getItem("theme") || "light");
 
@@ -69,6 +71,17 @@ export default function Header() {
             {user?.full_name?.[0] || "A"}
           </div>
 
+          <button
+            type="button"
+            onClick={() => {
+              logout();
+              navigate("/login");
+            }}
+            className="p-2 rounded-lg text-gray-500 hover:text-red-500 hover:bg-red-500/10 transition"
+            title="Log out"
+          >
+            <LogOut size={18} />
+          </button>
         </div>
 
       </div>

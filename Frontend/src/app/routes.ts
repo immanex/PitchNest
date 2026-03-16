@@ -14,8 +14,7 @@ import Settings from "./pages/Settings";
 import PrePitch from "./pages/PrePitch";
 import MyPitches from "./pages/MyPitches";
 import Analytics from "./pages/Analytics";
-
-
+import NotFound from "./pages/NotFound";
 import AppLayout from "./layout/AppLayout";
 
 export const router = createBrowserRouter([
@@ -30,6 +29,26 @@ export const router = createBrowserRouter([
   {
     path: "/login",
     Component: Login,
+  },
+  {
+    path: "/forgot-password",
+    Component: ForgotPassword,
+  },
+  {
+    path: "/reset-password",
+    Component: ResetPassword,
+  },
+  {
+    path: "/email-verification",
+    Component: EmailVerification,
+  },
+  {
+    path: "/profile-setup",
+    Component: ProfileSetup,
+  },
+  {
+    path: "/modes",
+    Component: ModeSelection,
   },
 
   /* DASHBOARD AREA */
@@ -67,5 +86,9 @@ export const router = createBrowserRouter([
   {
     path: "/room/:roomId",
     Component: LivePitchRoom,
+  },
+  {
+    path: "*",
+    Component: NotFound,
   },
 ]);

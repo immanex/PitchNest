@@ -145,26 +145,34 @@ export default function PostPitchAnalytics() {
     localStorage.setItem("theme", theme);
   }, [theme]);
 
-  /* FETCH */
+  const fetchPitchDetail = async () => {
+    if (!token) { setLoading(false); return; }
+    try {
+      const url = pitchId
+        ? `${BaseUrl}/api/dashboard/pitches/${pitchId}`
+        : `${BaseUrl}/api/dashboard/pitches/recent?limit=1`;
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) throw new Error("Failed to load pitch");
+      const data = await res.json();
+      const p = Array.isArray(data) ? data[0] : data;
+      setPitch(p || null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchPitch = async () => {
-      if (!token) { setLoading(false); return; }
-      try {
-        const url = pitchId
-          ? `${BaseUrl}/api/dashboard/pitches/${pitchId}`
-          : `${BaseUrl}/api/dashboard/pitches/recent?limit=1`;
-        const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-        if (!res.ok) throw new Error("Failed to load pitch");
-        const data = await res.json();
-        const p = Array.isArray(data) ? data[0] : data;
-        setPitch(p || null);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Failed to load");
-      } finally {
-        setLoading(false);
-      }
+    fetchPitchDetail();
+  }, [token, pitchId]);
+
+  useEffect(() => {
+    const onFocus = () => {
+      if (token) fetchPitchDetail();
     };
-    fetchPitch();
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
   }, [token, pitchId]);
 
   const strengths = pitch?.recommendations?.filter((r) => r.category === "strength").map((r) => r.content) ?? [];

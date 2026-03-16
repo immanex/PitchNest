@@ -59,11 +59,12 @@ export default function ModeSelection() {
 
   const { industry, startupType, experience } = location.state || {};
   const { user } = useUser();
+
   async function handlePitchSelection(modeId: string) {
     localStorage.setItem("selectedMode", modeId);
     localStorage.setItem("panelSize", String(panelSize));
     const BaseUrl = import.meta.env.VITE_BASE_URL || "http://localhost:8000";
-    let room = await fetch(`${BaseUrl}/api/room/create`, {
+    const res = await fetch(`${BaseUrl}/api/room/create`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -78,12 +79,16 @@ export default function ModeSelection() {
         investor_archetype: investorArchetype,
         panel_size: panelSize,
       }),
-    }).then((res) => res.json());
-    console.log("Created room:", room);
-    localStorage.setItem("roomId", room.room_id);
-
-    // Redirect to pitch page
-    window.location.href = "/room/" + room.room_id;
+    });
+    const room = await res.json();
+    if (!res.ok) {
+      alert(room?.detail || "Failed to create room. Please try again.");
+      return;
+    }
+    if (room?.room_id) {
+      localStorage.setItem("roomId", room.room_id);
+      window.location.href = "/room/" + room.room_id;
+    }
   }
   return (
     <div className="min-h-screen bg-[#0D1117] text-white">

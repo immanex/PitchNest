@@ -51,10 +51,11 @@ async def health_check():
 @app.get("/test-db")
 async def test_db():
     try:
+        from sqlalchemy import text
         from db.database import engine
 
         async with engine.connect() as conn:
-            result = await conn.execute("SELECT 1")
+            result = await conn.execute(text("SELECT 1"))
             return {"db_status": "connected", "result": result.scalar()}
     except Exception as e:
         return {"db_status": "failed", "error": str(e)}

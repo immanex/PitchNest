@@ -19,6 +19,7 @@ type UserContextType = {
   login: (token: string) => void;
   logout: () => void;
   rooms: any | null;
+  refetch: () => Promise<void>;
 };
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
@@ -32,39 +33,48 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
   const [rooms, setRooms] = useState<any | null>(null);
  const BaseUrl = import.meta.env.VITE_BASE_URL || "http://localhost:8000";
 
-  // Fetch logged-in user
-  useEffect(() => {
-    const fetchUser = async () => {
-      if (!token) return;
-
-      try {
-        const response = await fetch(`${BaseUrl}/api/auth/me`, {
+  const fetchUserAndRooms = async () => {
+    if (!token) return;
+    try {
+      const response = await fetch(`${BaseUrl}/api/auth/me`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        let roomsRes = await fetch(`${BaseUrl}/api/room/rooms`, {
           headers: {
             Authorization: `Bearer ${token}`,
           },
         });
-        if (response.ok) {
-          const data = await response.json();
-          console.log("Fetched user:", data);
-          let rooms = await fetch(`${BaseUrl}/api/room/rooms`, {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          });
-          rooms = await rooms.json();
-          console.log("Fetched rooms:", rooms);
-          setRooms(rooms);
-          setUser(data);
-        } else {
-          setUser(null);
+        roomsRes = await roomsRes.json();
+        setRooms(roomsRes);
+        setUser(data);
+      } else {
+        if (response.status === 401) {
+          localStorage.removeItem("token");
+          setToken(null);
         }
-      } catch (error) {
-        console.error("Error fetching user:", error);
         setUser(null);
       }
-    };
+    } catch (error) {
+      console.error("Error fetching user:", error);
+      setUser(null);
+    }
+  };
 
-    fetchUser();
+  useEffect(() => {
+    fetchUserAndRooms();
+  }, [token]);
+
+  // Refetch user and rooms when window regains focus so pages show live data
+  useEffect(() => {
+    const onFocus = () => {
+      if (token) fetchUserAndRooms();
+    };
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
   }, [token]);
 
   const login = (token: string) => {
@@ -79,7 +89,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
   };
 
   return (
-    <UserContext.Provider value={{ user, token, login, logout, rooms }}>
+    <UserContext.Provider value={{ user, token, login, logout, rooms, refetch: fetchUserAndRooms }}>
       {children}
     </UserContext.Provider>
   );
